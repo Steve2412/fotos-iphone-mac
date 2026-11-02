@@ -1,0 +1,57 @@
+# ───────────────────────── Compilación ─────────────────────────
+.build/
+.swiftpm/
+DerivedData/
+/fotos-iphone
+/*.bundle
+*.log
+
+# ──────────── Datos personales que genera la herramienta ────────────
+# Informes y volcados: nombres, fechas, tamaños y huellas de tus fotos.
+*.csv
+# Listas del álbum generadas por el Atajo.
+*.txt
+# Manifiesto de lo copiado (fase 3) y carpetas temporales de la copia.
+manifiesto*.json
+.fotos-iphone/
+.temporal-fotos-iphone/
+# Perfiles y caché exportados por error dentro del proyecto
+# (normalmente viven en ~/Library/Application Support/fotos-iphone/).
+perfiles/
+cache/
+
+# ───────── Fotos y vídeos, por si alguno acaba en el proyecto ─────────
+*.[Hh][Ee][Ii][Cc]
+*.[Hh][Ee][Ii][Ff]
+*.[Dd][Nn][Gg]
+*.[Jj][Pp][Gg]
+*.[Jj][Pp][Ee][Gg]
+*.[Pp][Nn][Gg]
+*.[Gg][Ii][Ff]
+*.[Tt][Ii][Ff]
+*.[Tt][Ii][Ff][Ff]
+*.[Ww][Ee][Bb][Pp]
+*.[Mm][Oo][Vv]
+*.[Mm][Pp]4
+*.[Mm]4[Vv]
+*.[Aa][Aa][Ee]
+*.[Dd][Aa][Tt]
+
+# ───────── Notas de traspaso entre chats (contienen detalles privados) ─────────
+CONTEXTO-MIGRACION.md
+CODIGO-COMPLETO.md
+
+# ───────────────────── Firma y secretos (v0.3) ─────────────────────
+*.p12
+*.cer
+*.mobileprovision
+*.provisionprofile
+.env
+.env.*
+
+# ──────────────────────── macOS / editores ────────────────────────
+.DS_Store
+.vscode/
+.idea/
+xcuserdata/
+*.xcuserstate

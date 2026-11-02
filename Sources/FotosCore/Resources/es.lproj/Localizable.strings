@@ -1,0 +1,10 @@
+/*
+  Textos de fotos-iphone — español.
+  Clave (izquierda): el texto en español tal como aparece en el código.
+  Valor (derecha): la traducción. Respeta %@, %ld, %lld y %% (son los huecos para los datos)
+  y los \n (saltos de línea). Para añadir un idioma, copia esta carpeta (p. ej. fr.lproj)
+  y traduce solo los valores.
+*/
+
+/* En español no hace falta traducir nada: las claves ya son el texto. */
+"_idioma" = "Español";
