@@ -35,17 +35,19 @@ public enum Perfiles {
         var completo = Opciones()
         completo.periodo = .todo
         completo.origenes = Set(Opciones.Origen.allCases)
+        completo.esteIPhone = false
         completo.camaras = nil
         completo.videosLivePhoto = true
         completo.organizacion = .anioMes
 
         var recientes = Opciones()
         recientes.periodo = .ultimosDias(7)
+        recientes.esteIPhone = false
         recientes.camaras = nil
         recientes.versiones = .final
         recientes.organizacion = .dia
 
-        // Como la v0.1 (fotos y vídeos del iPhone 17 Pro, original + editada), para el
+        // Como la v0.1 (fotos y vídeos de la cámara de este iPhone, original + editada), para el
         // rango de fechas del viaje: el periodo se pregunta (o se da con --desde/--hasta).
         var viaje = Opciones()
         viaje.periodo = .rango(desde: nil, hasta: nil)
@@ -58,7 +60,24 @@ public enum Perfiles {
     }
 
     public static func esIntegrado(_ p: Perfil) -> Bool {
-        integrados.contains { $0.nombre == p.nombre }
+        integrados.contains { mismoNombre($0, p.nombre) }
+    }
+
+    /// ¿Hay un archivo guardado con este nombre? (Los integrados no lo tienen, salvo que se actualizaran.)
+    public static func esGuardado(_ nombre: String, en carpeta: URL? = carpetaPorDefecto) -> Bool {
+        guardados(en: carpeta).contains { mismoNombre($0, nombre) }
+    }
+
+    /// Borra un perfil guardado. Los integrados no se pueden borrar; si se habían actualizado,
+    /// se borra la versión guardada y vuelve la integrada.
+    public static func borrar(_ nombre: String, en carpeta: URL? = carpetaPorDefecto) throws {
+        guard let carpeta, let p = guardados(en: carpeta).first(where: { mismoNombre($0, nombre) }) else {
+            if integrados.contains(where: { mismoNombre($0, nombre) }) {
+                throw ErrorHerramienta.argumentos(tr("«%@» es un perfil integrado: no se puede borrar.", tr(nombre)))
+            }
+            throw ErrorHerramienta.argumentos(tr("No existe el perfil «%@». Mira los disponibles con --perfiles.", nombre))
+        }
+        try FileManager.default.removeItem(at: carpeta.appendingPathComponent(nombreDeArchivo(p.nombre) + ".json"))
     }
 
     /// Perfiles guardados por el usuario, por orden alfabético.
@@ -106,7 +125,14 @@ public enum Perfiles {
               let datos = try? Data(contentsOf: url) else { return nil }
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
-        return try? d.decode(Perfil.self, from: datos)
+        guard var p = try? d.decode(Perfil.self, from: datos) else { return nil }
+        // De la v0.2: el «iPhone 17 Pro» fijo era el valor por defecto; ahora lo es «este iPhone».
+        let texto = String(decoding: datos, as: UTF8.self)
+        if !texto.contains("\"esteIPhone\""), p.opciones.camaras == ["iPhone 17 Pro"] {
+            p.opciones.esteIPhone = true
+            p.opciones.camaras = nil
+        }
+        return p
     }
 
     public static func guardarUltima(_ p: Perfil, en carpeta: URL? = Rutas.soporte) {

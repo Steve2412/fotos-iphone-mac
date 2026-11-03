@@ -54,8 +54,18 @@ final class Asistente {
         let nombre = try await Consola.texto(tr("\n💾 ¿Guardar estas opciones como perfil? Escribe un nombre (Intro para no guardar)"),
                                              porDefecto: "")
         if !nombre.isEmpty {
-            try Perfiles.guardar(Perfil(nombre: nombre, opciones: op, destino: destino))
-            print(tr("   Perfil «%@» guardado. La próxima vez: --perfil \"%@\"", nombre, nombre))
+            let existia = Perfiles.buscar(nombre) != nil
+            if existia {
+                let sustituir = try await Consola.siNo(tr("   Ya existe el perfil «%@». ¿Actualizarlo con estas opciones?", nombre), porDefecto: true)
+                if sustituir {
+                    let nombreReal = Perfiles.buscar(nombre)?.nombre ?? nombre
+                    try Perfiles.guardar(Perfil(nombre: nombreReal, opciones: op.sinDeducciones, destino: destino))
+                    print(tr("   ✅ Perfil «%@» actualizado.", tr(nombreReal)))
+                }
+            } else {
+                try Perfiles.guardar(Perfil(nombre: nombre, opciones: op.sinDeducciones, destino: destino))
+                print(tr("   ✅ Perfil «%@» guardado. La próxima vez: --perfil \"%@\"", nombre, nombre))
+            }
         }
         Perfiles.guardarUltima(Perfil(nombre: "ultima-vez", opciones: op, destino: destino))
 
@@ -101,14 +111,19 @@ final class Asistente {
         switch actual {
         case .todo: porDefecto = 0
         case .ultimosDias: porDefecto = 1
-        case .rango: porDefecto = 2
+        case .mesAnterior: porDefecto = 2
+        case .rango: porDefecto = 3
         }
         let i = try await Consola.elegir(tr("📅 ¿Qué periodo?"),
-                                         [tr("Todo el iPhone"), tr("Los últimos días"), tr("Entre dos fechas")],
+                                         [tr("Todo el iPhone"), tr("Los últimos días"),
+                                          tr("El mes pasado (%@)", Opciones.Periodo.textoMesAnterior()),
+                                          tr("Entre dos fechas")],
                                          porDefecto: porDefecto)
         switch i {
         case 0:
             return .todo
+        case 2:
+            return .mesAnterior
         case 1:
             var dias = 7
             if case .ultimosDias(let n) = actual { dias = n }
@@ -155,13 +170,22 @@ final class Asistente {
 
         // Cámaras
         if op.origenes.contains(.camara) {
+            let modelo = await EsteIPhone.deducir(catalogo, lector: LectorCamara())
+            let textoEste = modelo.map { tr("Solo de este iPhone (%@, deducido de sus fotos recientes)", $0) }
+                ?? tr("Solo de este iPhone (se deduce de sus fotos recientes)")
             let i = try await Consola.elegir(tr("📷 ¿De qué cámaras?"),
-                                             [tr("De cualquier cámara"),
+                                             [textoEste,
+                                              tr("De cualquier cámara"),
                                               tr("Elegir entre las cámaras del periodo (la primera vez tarda: lee cada foto)")],
-                                             porDefecto: op.camaras == nil ? 0 : 1)
+                                             porDefecto: op.esteIPhone ? 0 : (op.camaras == nil ? 1 : 2))
             if i == 0 {
+                op.esteIPhone = true
+                op.camaras = nil
+            } else if i == 1 {
+                op.esteIPhone = false
                 op.camaras = nil
             } else {
+                op.esteIPhone = false
                 let conteos = await ListaCamaras(config: config, catalogo: catalogo)
                     .contar(en: op.periodo).filter { $0.modelo != nil }
                 if conteos.isEmpty {

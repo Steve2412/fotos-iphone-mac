@@ -5,7 +5,7 @@
 A macOS tool that copies the **original** photos and videos from an iPhone to a Mac over **USB**
 (HEIC, DNG, MOV… with no conversion and all their metadata), using `ImageCaptureCore`.
 
-> **Status:** v0.2 in development. Works from Terminal. v0.3 will add a Mac app (SwiftUI).
+> **Status:** v0.3. A **Mac app** (SwiftUI) and a **Terminal** tool on the same library.
 
 ## What it does
 
@@ -26,7 +26,7 @@ A macOS tool that copies the **original** photos and videos from an iPhone to a 
 
 ## Requirements
 
-- A Mac with macOS 13 or later and the Xcode developer tools.
+- A Mac with macOS 14 or later and the Xcode developer tools.
 - On the iPhone: *Settings → Apps → Photos → Transfer to Mac or PC → **Keep Originals***.
 - When copying or simulating: iPhone unlocked and connected by cable, with Auto-Lock set to *Never*;
   **Image Capture open** and Photos closed on the Mac.
@@ -36,9 +36,33 @@ A macOS tool that copies the **original** photos and videos from an iPhone to a 
 ```bash
 ./compilar.sh     # builds ./fotos-iphone and its translations; errors go to compilacion.log
 ./probar.sh       # tests that don't need an iPhone; output in pruebas.log
+./empaquetar-app.sh && open "Fotos iPhone.app"   # the Mac app; errors in compilacion-app.log
 ```
 
-## Usage
+## Mac app
+
+`./empaquetar-app.sh` builds **Fotos iPhone.app** in the project folder (you can move it to
+Applications). It uses the same options, profiles and caches as the Terminal tool.
+
+1. **On launch** it checks that Image Capture is open and opens it if not (without it macOS doesn't
+   deliver the iPhone's photos). If the catalog doesn't arrive, it tells you what to do. While
+   connecting, **Stop** cancels the attempt and **Reconnect** tries again.
+2. **Options** (left panel): profile, period (including *last month*), sources, cameras
+   (*this iPhone*, worked out from its recent photos; any; or chosen ones), versions, videos, RAW,
+   layout and destination. Profiles can be saved, updated (it confirms) and deleted (except the
+   built-in ones).
+3. **Simulate** shows what would be copied, what is already copied and what is skipped and why, with
+   thumbnails requested from the iPhone (without downloading the files). Click one to see each file.
+4. **Copy…** is only enabled after an up-to-date simulation, and asks for confirmation. It shows
+   progress, speed and time left; you can **pause**, **resume** and **cancel** (when the current
+   file finishes). The Mac doesn't sleep during the copy.
+5. **Delete from iPhone** (selector at the top): items from the period that are in the destination
+   folder, or what a previous copy copied (its `informe.csv`). First you **review** what would be
+   deleted and, to delete, you type the key (“DELETE 12”). Every deletion is checked on the iPhone.
+6. Closing the window quits the app. With a copy or deletion in progress, it asks first.
+7. **Settings** (⌘,): app language (system, Spanish or English).
+
+## Terminal
 
 ### Assistant
 
@@ -59,15 +83,18 @@ Three come built in and you can save your own:
 |---|---|
 | Full backup | The whole camera roll, any source and camera, original + edited, with Live Photo videos, by year and month |
 | Recent days backup | The last 7 days, any camera, final version, by day |
-| Trip | iPhone 17 Pro photos and videos (like v0.1) in the date range you give |
+| Trip | Photos and videos from this iPhone's camera (like v0.1) in the date range you give |
 
-They are stored in `~/Library/Application Support/fotos-iphone/perfiles/`.
+They are stored in `~/Library/Application Support/fotos-iphone/perfiles/`. Saving with a name that already exists updates it (and says so). Built-in profiles can't be deleted; if you update one, deleting your version restores the original.
+
+“This iPhone” is the default camera: the iPhone doesn't report its model over the cable, so it is worked out from its recent photos (Camera photos carry the model in their metadata).
 
 ```bash
 ./fotos-iphone --profiles                                   # list them
 ./fotos-iphone --profile "Full backup" --dest ~/Pictures/iPhone
 ./fotos-iphone --profile Trip --from 2026-10-01 --to 2026-10-15 --dest ~/Pictures/Trip
 ./fotos-iphone --sources screenshots --layout month --save-profile "Screenshots"
+./fotos-iphone --delete-profile "Screenshots"
 ```
 
 ### With options
@@ -84,6 +111,9 @@ A real copy always simulates first and asks; `--yes` copies without asking.
 # Screenshots and files from other apps from the last week, organized by month
 ./fotos-iphone --days 7 --sources screenshots,apps --layout month --simulate
 
+# Everything from last month (the whole previous calendar month)
+./fotos-iphone --last-month --dest ~/Pictures/Month --simulate
+
 # The whole camera roll, any camera, final version only, videos up to 2 GB
 ./fotos-iphone --all --sources all --any-camera --versions final --max-video 2GB --simulate
 
@@ -99,9 +129,14 @@ A real copy always simulates first and asks; `--yes` copies without asking.
 Every option is accepted in English and Spanish (`--from` = `--desde`, `--dest` = `--destino`…).
 `--language en` or `--idioma es` force the language of the messages (default: the system's).
 
-> **Deleting from the iPhone (`--delete`) is experimental.** Deleting over the cable is permanent
-> (it does not go to “Recently Deleted”) and, with iCloud Photos, it also deletes from iCloud.
-> It asks for typed confirmation and only touches items that are fully backed up.
+> **Deleting from the iPhone (`--delete`).** Deleting over the cable is permanent (it does not go
+> to “Recently Deleted”) and, with iCloud Photos, it also deletes from iCloud. It only touches items
+> whose original and edit are in the backup, asks you to type a key, and then checks on the iPhone
+> that each photo was really deleted. With `--report informe.csv` the candidates come from a copy's report:
+>
+> ```bash
+> ./fotos-iphone --delete --simulate --report ~/Pictures/Backup/informe.csv
+> ```
 
 ## How the source of each file is recognized
 
@@ -122,6 +157,8 @@ Sources/FotosCore/        Pure logic (no iPhone): catalog, options, rules, repor
   Resources/<language>.lproj/Localizable.strings
 Sources/FotosIPhoneKit/   iPhone connection, copy and delete (ImageCaptureCore, AVFoundation)
 Sources/fotos-iphone/     Terminal tool
+Sources/FotosIPhoneApp/   Mac app (SwiftUI)
+App/                      Info.plist, icon (AppIcon.icns) and its generator (generar-icono.py)
 Tests/FotosCoreTests/     Tests
 ```
 
@@ -141,7 +178,8 @@ in `~/Library/Application Support/fotos-iphone/`.
 
 ## Roadmap
 
-- **v0.2** (in progress): separate Swift library ✓, configurable filters ✓, languages ✓,
-  interactive assistant ✓, profiles ✓. Pending: test deletion with test photos.
-- **v0.3**: SwiftUI Mac app on the same library: iPhone status, calendar and options, simulation
-  preview with thumbnails, copy with pause and resume, and a separate delete screen.
+- **v0.2** ✓: separate Swift library, configurable filters, languages, interactive assistant,
+  profiles and verified deletion.
+- **v0.3** ✓: SwiftUI Mac app on the same library: iPhone status, options and profiles, simulation
+  preview with thumbnails, copy with pause and resume, deletion from the folder or from an
+  `informe.csv`, language in Settings and an icon.

@@ -42,10 +42,22 @@ func mostrarPerfiles() {
 if let nombre = configuracion.guardarPerfil {
     do {
         let destino = configuracion.destino.map { ($0.path as NSString).abbreviatingWithTildeInPath }
+        let existia = Perfiles.esGuardado(nombre)
         let url = try Perfiles.guardar(Perfil(nombre: nombre, opciones: configuracion.opciones, destino: destino))
-        print(tr("💾 Perfil «%@» guardado en %@", nombre, url.path))
+        print(existia ? tr("💾 Perfil «%@» actualizado en %@", nombre, url.path)
+                      : tr("💾 Perfil «%@» guardado en %@", nombre, url.path))
         for l in configuracion.opciones.resumen { print("   · " + l) }
         print("")
+    } catch {
+        fputs("❌ \(error.localizedDescription)\n", stderr)
+        exit(1)
+    }
+}
+if let nombre = configuracion.borrarPerfil {
+    do {
+        try Perfiles.borrar(nombre)
+        print(tr("🗑  Perfil «%@» borrado.", nombre))
+        exit(0)
     } catch {
         fputs("❌ \(error.localizedDescription)\n", stderr)
         exit(1)
@@ -68,6 +80,11 @@ final class Programa {
 
     init(config: Configuracion) {
         self.config = config
+        // Si el iPhone se desconecta a mitad, la Terminal termina (lo ya copiado se salta al repetir).
+        conexion.observador = { evento in
+            Observadores.terminal(evento)
+            if case .conexion(.desconectado) = evento { exit(3) }
+        }
     }
 
     func ejecutar() async throws {
@@ -78,7 +95,7 @@ final class Programa {
         switch config.modo {
         case .asistente:
             try await Asistente(config: config, catalogo: catalogo).ejecutar()
-        case .perfiles, .guardarPerfil:
+        case .perfiles, .guardarPerfil, .borrarPerfil:
             break
         case .inspeccionar:
             await Inspector(config: config, catalogo: catalogo).ejecutar()

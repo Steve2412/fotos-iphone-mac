@@ -48,6 +48,13 @@ public enum Idioma {
         return tabla?.localizedString(forKey: clave, value: respaldo, table: nil) ?? respaldo
     }
 
+    /// Texto de una clave en un idioma concreto (sin cambiar el idioma en uso).
+    public static func texto(_ clave: String, enIdioma idioma: String) -> String {
+        guard let ruta = recursos?.path(forResource: idioma, ofType: "lproj"),
+              let tabla = Bundle(path: ruta) else { return clave }
+        return tabla.localizedString(forKey: clave, value: clave, table: nil)
+    }
+
     // MARK: Carpeta de recursos
 
     /// Nombre con el que SwiftPM empaqueta los recursos de FotosCore.

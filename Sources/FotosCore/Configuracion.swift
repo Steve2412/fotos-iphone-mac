@@ -39,6 +39,8 @@ public struct Configuracion {
         case perfiles
         /// Solo guardar un perfil (no necesita el iPhone).
         case guardarPerfil
+        /// Solo borrar un perfil guardado (no necesita el iPhone).
+        case borrarPerfil
     }
 
     public var modo: Modo = .transferir
@@ -54,10 +56,14 @@ public struct Configuracion {
     /// Código de idioma pedido con --idioma (nil = el del sistema).
     public var idioma: String?
     public var opciones = Opciones()
+    /// Informe de una copia (--informe): con --borrar, los candidatos a borrar salen de él.
+    public var informe: URL?
     /// Perfil cargado con --perfil (sus opciones ya están en `opciones`).
     public var perfil: String?
     /// Nombre con el que guardar las opciones (--guardar-perfil).
     public var guardarPerfil: String?
+    /// Perfil guardado que borrar (--borrar-perfil).
+    public var borrarPerfil: String?
     /// Antes de una copia real: simular, mostrar el resumen y pedir confirmación (--si lo salta).
     public var confirmar = true
     /// Mostrar cada archivo (en las simulaciones previas a confirmar solo se muestra el resumen).

@@ -32,7 +32,7 @@ public final class LectorCamara {
         cache = usarCache ? CacheCamaras(url: CacheCamaras.porDefecto) : nil
     }
 
-    func infoFoto(_ a: Archivo) async -> InfoCamara {
+    public func infoFoto(_ a: Archivo) async -> InfoCamara {
         if let c = cache?[a] { return c }
         let dic = (try? await a.file.leerMetadatos()) ?? [:]
         let info = DatosCamara.info(en: dic)

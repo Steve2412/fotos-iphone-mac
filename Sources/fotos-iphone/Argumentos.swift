@@ -18,7 +18,8 @@ extension Configuracion {
         "--live-videos": "--videos-live", "--sources": "--origenes", "--any-camera": "--cualquier-camara",
         "--layout": "--organizar", "--cameras": "--camaras",
         "--profile": "--perfil", "--save-profile": "--guardar-perfil", "--profiles": "--perfiles",
-        "--wizard": "--asistente", "--yes": "--si",
+        "--delete-profile": "--borrar-perfil", "--this-iphone": "--este-iphone", "--last-month": "--mes-pasado",
+        "--wizard": "--asistente", "--yes": "--si", "--report": "--informe",
     ]
 
     /// Busca --idioma / --language antes de leer lo demás, para que los errores salgan ya traducidos.
@@ -47,14 +48,17 @@ extension Configuracion {
       --desde AAAA-MM-DD Copia lo hecho desde ese día (incluido).
       --hasta AAAA-MM-DD …hasta ese día (incluido). Se usa en lugar de --lista.
       --dias N           Los últimos N días (hoy incluido).
+      --mes-pasado       El mes anterior completo (del día 1 al último).
       --todo             Todo el iPhone.
       --lista RUTA       Lista del álbum generada por el Atajo
                          (una línea por elemento: IMG_1234|2026-10-20T14:33:12).
       --destino RUTA     Carpeta donde se guardan los archivos y el informe.csv.
       --simular          Muestra qué se copiaría y qué se descartaría, sin copiar nada.
       --borrar           Borra del iPhone lo que ya está completo en el respaldo de --destino
-                         (original y editada). Pide escribir una clave; con --simular solo
-                         muestra qué borraría. EXPERIMENTAL.
+                         (original y editada), comprobando después en el iPhone que se borró.
+                         Pide escribir una clave; con --simular solo muestra qué borraría.
+      --informe RUTA     Con --borrar: los candidatos salen de un informe.csv de una copia
+                         (el respaldo es su carpeta, salvo que se indique --destino).
       --sha256           Añade al informe la huella SHA-256 de cada archivo copiado.
       --inspeccionar     Muestra cómo ve el Mac los archivos del iPhone (nombres, grupos, origen, cámara).
       --camaras          Cuenta los elementos por cámara y origen (en el periodo, o en todo el iPhone).
@@ -73,9 +77,11 @@ extension Configuracion {
       --perfil NOMBRE    Usa las opciones de un perfil (las demás opciones lo modifican).
       --guardar-perfil NOMBRE  Guarda las opciones indicadas como perfil.
       --perfiles         Muestra los perfiles disponibles.
+      --borrar-perfil NOMBRE  Borra un perfil guardado (los integrados no se pueden borrar).
 
-    QUÉ COPIAR (por defecto, como la v0.1: fotos y vídeos del iPhone 17 Pro, original + editada)
+    QUÉ COPIAR (por defecto: fotos y vídeos de la cámara de este iPhone, original + editada)
       --origenes LISTA   camara, capturas, grabaciones, apps (separados por comas) o todo.
+      --este-iphone      Solo la cámara de este iPhone, deducida de sus fotos recientes (por defecto).
       --modelo NOMBRE    Modelo de cámara aceptado. Se puede repetir.
       --cualquier-camara Acepta fotos y vídeos de cualquier cámara.
       --versiones V      originales (solo el original) · final (la editada si existe)
@@ -107,6 +113,7 @@ extension Configuracion {
         var hasta: Date?
         var periodoDado = false
         var cualquierCamara = false
+        var esteIPhoneExplicito = false
         var origenExplicito = false
         func invalido(_ opcion: String, _ v: String, _ validos: String) -> ErrorHerramienta {
             ErrorHerramienta.argumentos(tr("Valor no válido para %@: «%@». Valores posibles: %@.", opcion, v, validos))
@@ -178,6 +185,15 @@ extension Configuracion {
                 nombres.append(((try valor(arg)) as NSString).deletingPathExtension)
             case "--idioma":
                 idioma = try valor(arg)
+            case "--mes-pasado":
+                periodoDado = true
+                opciones.periodo = .mesAnterior
+            case "--este-iphone":
+                esteIPhoneExplicito = true
+                origenExplicito = true
+            case "--borrar-perfil":
+                borrarPerfil = try valor(arg)
+                modo = .borrarPerfil
             case "--todo":
                 periodoDado = true
                 opciones.periodo = .todo
@@ -219,6 +235,7 @@ extension Configuracion {
             case "--perfiles": modo = .perfiles
             case "--asistente": modo = .asistente
             case "--si": confirmar = false
+            case "--informe": informe = ruta(try valor(arg))
             case "--ayuda":
                 print(Configuracion.ayuda)
                 exit(0)
@@ -228,13 +245,23 @@ extension Configuracion {
             i += 1
         }
 
-        if cualquierCamara && !modelos.isEmpty {
-            throw ErrorHerramienta.argumentos(tr("Usa --modelo o --cualquier-camara, no los dos."))
+        if [cualquierCamara, !modelos.isEmpty, esteIPhoneExplicito].filter({ $0 }).count > 1 {
+            throw ErrorHerramienta.argumentos(tr("Usa solo una de --este-iphone, --modelo o --cualquier-camara."))
         }
-        if !modelos.isEmpty { opciones.camaras = modelos }
-        if cualquierCamara { opciones.camaras = nil }
+        if !modelos.isEmpty {
+            opciones.esteIPhone = false
+            opciones.camaras = modelos
+        }
+        if cualquierCamara {
+            opciones.esteIPhone = false
+            opciones.camaras = nil
+        }
+        if esteIPhoneExplicito {
+            opciones.esteIPhone = true
+            opciones.camaras = nil
+        }
         if desde != nil || hasta != nil {
-            if periodoDado { throw ErrorHerramienta.argumentos(tr("Usa un solo periodo: --desde/--hasta, --dias o --todo.")) }
+            if periodoDado { throw ErrorHerramienta.argumentos(tr("Usa un solo periodo: --desde/--hasta, --dias, --mes-pasado o --todo.")) }
             opciones.periodo = .rango(desde: desde, hasta: hasta)
             periodoDado = true
         }
@@ -255,11 +282,20 @@ extension Configuracion {
         // salvo que se pida un filtro con --origenes, --modelo o --cualquier-camara (o un perfil).
         if (!numeros.isEmpty || !nombres.isEmpty), !origenExplicito, perfil == nil {
             opciones.origenes = Set(Opciones.Origen.allCases)
+            opciones.esteIPhone = false
             opciones.camaras = nil
         }
 
+        if informe != nil {
+            guard borrar else {
+                throw ErrorHerramienta.argumentos(tr("--informe se usa con --borrar (elige qué borrar a partir de un informe.csv de una copia)."))
+            }
+            // Por defecto, el respaldo es la carpeta donde está el informe.
+            if destino == nil { destino = informe!.deletingLastPathComponent() }
+        }
+
         if modo == .transferir {
-            guard lista != nil || periodoDado || !numeros.isEmpty || !nombres.isEmpty else {
+            guard lista != nil || periodoDado || !numeros.isEmpty || !nombres.isEmpty || informe != nil else {
                 throw ErrorHerramienta.argumentos(tr("Indica el periodo (--desde/--hasta, --dias N o --todo), elementos concretos (--numero, --nombre) o la lista del álbum con --lista."))
             }
             if let d = desde, let h = hasta, d > h {

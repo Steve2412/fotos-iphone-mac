@@ -42,6 +42,10 @@ public final class Informe {
         let motivo: String
         let bytes: Int64
         let sha: String
+        /// Fecha de captura del elemento (distingue dos IMG_0001 cuando el contador da la vuelta).
+        let fecha: Date?
+        /// Ruta del archivo dentro del destino (si se copió o ya estaba).
+        let ruta: String
     }
 
     private(set) var filas: [Fila] = []
@@ -49,9 +53,10 @@ public final class Informe {
     public init() {}
 
     public func agregar(entrada: String, archivo: String, tipo: String, resultado: Resultado,
-                        motivo: String, bytes: Int64 = 0, sha: String = "") {
+                        motivo: String, bytes: Int64 = 0, sha: String = "",
+                        fecha: Date? = nil, ruta: String = "") {
         filas.append(Fila(entrada: entrada, archivo: archivo, tipo: tipo, resultado: resultado,
-                          motivo: motivo, bytes: bytes, sha: sha))
+                          motivo: motivo, bytes: bytes, sha: sha, fecha: fecha, ruta: ruta))
     }
 
     public func escribir(en url: URL) throws {
@@ -59,9 +64,10 @@ public final class Informe {
     }
 
     func texto() -> String {
-        var t = "\u{FEFF}" + tr("elemento_album;archivo;tipo;resultado;motivo;bytes;sha256") + "\n"
+        var t = "\u{FEFF}" + tr("elemento_album;archivo;tipo;resultado;motivo;bytes;sha256;fecha;ruta") + "\n"
         for f in filas {
-            t += [f.entrada, f.archivo, f.tipo, f.resultado.texto, f.motivo, String(f.bytes), f.sha]
+            let fecha = f.fecha.map { InformeLeido.formatoFecha.string(from: $0) } ?? ""
+            t += [f.entrada, f.archivo, f.tipo, f.resultado.texto, f.motivo, String(f.bytes), f.sha, fecha, f.ruta]
                 .map(campo).joined(separator: ";") + "\n"
         }
         return t

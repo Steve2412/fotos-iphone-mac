@@ -15,19 +15,33 @@ public final class Transferencia {
     private var destino: URL!
     private var temporal: URL!
 
-    private var op: Opciones { config.opciones }
+    /// Las opciones, con «este iPhone» ya resuelto al empezar.
+    private var op: Opciones
+
+    /// Quién recibe los avisos (la Terminal imprime los mensajes; la app usa los eventos).
+    public var observador: Observador = Observadores.terminal
+    /// Pausa y cancelación desde fuera (la app). nil en la Terminal.
+    public var control: ControlCopia?
+    /// Dónde dejar el informe de una simulación (por defecto, la carpeta actual de la Terminal).
+    public var rutaInformeSimulacion: URL?
+
+    private func decir(_ texto: String) { observador(.mensaje(texto)) }
 
     public init(config: Configuracion, catalogo: Catalogo) {
         self.config = config
         self.catalogo = catalogo
         self.lector = LectorCamara()
+        self.op = config.opciones
     }
 
     public func ejecutar() async throws {
+        var resueltas = op
+        try await EsteIPhone.resolver(&resueltas, catalogo: catalogo, lector: lector, observador: observador)
+        op = resueltas
         if config.mostrarOpciones {
-            print(tr("⚙️  Opciones:"))
-            for linea in op.resumen { print("   · " + linea) }
-            print("")
+            decir(tr("⚙️  Opciones:"))
+            for linea in op.resumen { decir("   · " + linea) }
+            decir("")
         }
 
         let entradas: [EntradaAlbum]
@@ -40,15 +54,16 @@ public final class Transferencia {
                 return EntradaAlbum(linea: i, nombre: el.etiqueta, numero: el.numero ?? 0, fecha: el.fecha)
             }
             guard !entradas.isEmpty else { throw ErrorHerramienta.lista(tr("No hay archivos en ese periodo.")) }
-            print(tr("📅 %ld elementos %@.", entradas.count, op.periodo.descripcion))
+            decir(tr("📅 %ld elementos %@.", entradas.count, op.periodo.descripcion))
         } else {
             entradas = try ListaAlbum.leer(config.lista!)
             guard !entradas.isEmpty else { throw ErrorHerramienta.lista(tr("La lista del álbum está vacía.")) }
-            print(tr("📝 %ld elementos en la lista del álbum.", entradas.count))
+            decir(tr("📝 %ld elementos en la lista del álbum.", entradas.count))
         }
 
+        observador(.inicio(elementos: entradas.count, simulacion: config.simular))
         if config.simular {
-            print(tr("🧪 Simulación: no se copiará nada.\n"))
+            decir(tr("🧪 Simulación: no se copiará nada.\n"))
             // Con destino conocido, la simulación también dice qué está ya copiado o se movería.
             if let d = config.destino {
                 destino = d.standardizedFileURL
@@ -60,24 +75,30 @@ public final class Transferencia {
             try? fm.removeItem(at: temporal)
             try fm.createDirectory(at: temporal, withIntermediateDirectories: true)
             manifiesto = Manifiesto.leer(en: destino)
-            print(tr("📂 Destino: %@\n", destino.path))
+            decir(tr("📂 Destino: %@\n", destino.path))
         }
 
         var procesados = Set<ObjectIdentifier>()
         for (i, entrada) in entradas.enumerated() {
+            if let control, !(await control.continuar()) {
+                decir(tr("\n⏹  Copia cancelada: lo ya copiado se queda en el destino y se puede reanudar."))
+                observador(.cancelada)
+                break
+            }
+            observador(.elemento(indice: i + 1, total: entradas.count, etiqueta: entrada.nombre))
             let prefijo = "[\(i + 1)/\(entradas.count)] \(entrada.nombre)"
             let busqueda: Busqueda = directos[entrada.linea].map { .encontrado($0) } ?? catalogo.buscar(entrada)
             switch busqueda {
             case .noEncontrado(let motivo):
-                if config.detalle { print("\(prefijo)  ✗ \(motivo)") }
+                if config.detalle { decir("\(prefijo)  ✗ \(motivo)") }
                 informe.agregar(entrada: entrada.nombre, archivo: "", tipo: "", resultado: .noEncontrado, motivo: motivo)
             case .encontrado(let el):
                 guard procesados.insert(ObjectIdentifier(el)).inserted else {
-                    print(tr("%@  (repetido en la lista, ya procesado)", prefijo))
+                    decir(tr("%@  (repetido en la lista, ya procesado)", prefijo))
                     continue
                 }
                 if config.detalle {
-                    print(tr("%@  · %@ del %@", prefijo, el.descripcion, formatoFecha(el.fecha)))
+                    decir(tr("%@  · %@ del %@", prefijo, el.descripcion, formatoFecha(el.fecha)))
                 }
                 await procesar(el, entrada: entrada)
             }
@@ -87,28 +108,30 @@ public final class Transferencia {
             }
             if (i + 1) % 200 == 0 { lector.guardar() }
             if !config.detalle && ((i + 1) % 100 == 0 || i + 1 == entradas.count) {
-                print(tr("   … %ld/%ld", i + 1, entradas.count))
+                decir(tr("   … %ld/%ld", i + 1, entradas.count))
             }
         }
         lector.guardar()
 
         let rutaInforme: URL
         if config.simular {
-            rutaInforme = URL(fileURLWithPath: fm.currentDirectoryPath).appendingPathComponent("informe-simulacion.csv")
+            rutaInforme = rutaInformeSimulacion
+                ?? URL(fileURLWithPath: fm.currentDirectoryPath).appendingPathComponent("informe-simulacion.csv")
         } else {
             try? fm.removeItem(at: temporal)
             try? manifiesto.escribir(en: destino)
             rutaInforme = destino.appendingPathComponent("informe.csv")
         }
         try informe.escribir(en: rutaInforme)
-        print("\n" + informe.resumen(simulacion: config.simular))
+        decir("\n" + informe.resumen(simulacion: config.simular))
         if lector.videosSinLeer > 0 {
-            print(tr("   ⚠️  %ld vídeos sin cabecera legible: su cámara se comprueba al copiar.", lector.videosSinLeer))
+            decir(tr("   ⚠️  %ld vídeos sin cabecera legible: su cámara se comprueba al copiar.", lector.videosSinLeer))
         }
         if reubicados > 0 {
-            print(tr("   ↪︎ %ld archivos ya copiados se movieron a la organización elegida. Las carpetas antiguas que hayan quedado vacías puedes borrarlas desde el Finder.", reubicados))
+            decir(tr("   ↪︎ %ld archivos ya copiados se movieron a la organización elegida. Las carpetas antiguas que hayan quedado vacías puedes borrarlas desde el Finder.", reubicados))
         }
-        print(tr("📄 Informe: %@", rutaInforme.path))
+        decir(tr("📄 Informe: %@", rutaInforme.path))
+        observador(.fin(informe: rutaInforme))
     }
 
     // MARK: Un elemento
@@ -116,13 +139,16 @@ public final class Transferencia {
     private func procesar(_ el: Elemento, entrada: EntradaAlbum) async {
         let decisiones = Reglas.clasificar(el, op)
 
-        func registrar(_ d: Decision, _ resultado: Resultado, _ motivo: String = "", sha: String = "") {
+        func registrar(_ d: Decision, _ resultado: Resultado, _ motivo: String = "", sha: String = "", ruta: String = "") {
             if config.detalle {
                 let nota = motivo.isEmpty ? "" : " — \(motivo)"
-                print("     \(resultado.icono) \(d.archivo.nombre)  [\(d.tipo.texto)]  \(resultado.texto)\(nota)")
+                decir("     \(resultado.icono) \(d.archivo.nombre)  [\(d.tipo.texto)]  \(resultado.texto)\(nota)")
             }
+            observador(.archivo(etiqueta: entrada.nombre, archivo: d.archivo, tipo: d.tipo,
+                                resultado: resultado, motivo: motivo))
             informe.agregar(entrada: entrada.nombre, archivo: d.archivo.nombre, tipo: d.tipo.texto,
-                            resultado: resultado, motivo: motivo, bytes: d.archivo.tamano, sha: sha)
+                            resultado: resultado, motivo: motivo, bytes: d.archivo.tamano, sha: sha,
+                            fecha: el.fecha, ruta: ruta)
         }
         func descartarTodo(_ m: Motivo) {
             for d in decisiones { registrar(d, .descartado, m.texto) }
@@ -235,7 +261,7 @@ public final class Transferencia {
                 if tam == d.archivo.tamano {
                     manifiesto.registrar(d.archivo, ruta: relativa(final), elemento: el.etiqueta, sha256: sha)
                 }
-                registrar(d, tam == d.archivo.tamano ? .copiado : .copiadoConAviso, nota, sha: sha)
+                registrar(d, tam == d.archivo.tamano ? .copiado : .copiadoConAviso, nota, sha: sha, ruta: relativa(final))
             } catch {
                 registrar(d, .error, error.localizedDescription)
             }
@@ -246,7 +272,7 @@ public final class Transferencia {
     /// si está en otra (se copió con otra organización), se mueve dentro del destino a la que le toca,
     /// sin volver a descargarlo. Nunca se sobrescribe otro archivo.
     private func reubicarSiHaceFalta(_ d: Decision, existente: URL, elemento el: Elemento,
-                                     registrar: (Decision, Resultado, String, String) -> Void) {
+                                     registrar: (Decision, Resultado, String, String, String) -> Void) {
         let sha = manifiesto.entradas[d.archivo.identidad]?.sha256
         let actual = relativa(existente)
         let carpetaActual = (actual as NSString).deletingLastPathComponent
@@ -255,7 +281,7 @@ public final class Transferencia {
             if !config.simular {
                 manifiesto.registrar(d.archivo, ruta: actual, elemento: el.etiqueta, sha256: sha)
             }
-            registrar(d, .yaExistia, "", "")
+            registrar(d, .yaExistia, "", "", actual)
             return
         }
         var prevista = destino.appendingPathComponent(d.rutaRelativa)
@@ -265,7 +291,7 @@ public final class Transferencia {
         }
         let nota = tr("de %@ a %@", actual, relativa(prevista))
         if config.simular {
-            registrar(d, .seReubicaria, nota, "")
+            registrar(d, .seReubicaria, nota, "", actual)
             return
         }
         do {
@@ -273,11 +299,11 @@ public final class Transferencia {
             try fm.moveItem(at: existente, to: prevista)
             manifiesto.registrar(d.archivo, ruta: relativa(prevista), elemento: el.etiqueta, sha256: sha)
             reubicados += 1
-            registrar(d, .reubicado, nota, "")
+            registrar(d, .reubicado, nota, "", relativa(prevista))
         } catch {
             // No se pudo mover: se deja donde estaba, que sigue siendo un respaldo válido.
             manifiesto.registrar(d.archivo, ruta: actual, elemento: el.etiqueta, sha256: sha)
-            registrar(d, .yaExistia, tr("no se pudo mover a %@: %@", d.rutaRelativa, error.localizedDescription), "")
+            registrar(d, .yaExistia, tr("no se pudo mover a %@: %@", d.rutaRelativa, error.localizedDescription), "", actual)
         }
     }
 
@@ -303,10 +329,21 @@ public final class Transferencia {
     }
 
     private func descargarTemporal(_ a: Archivo) async throws -> URL {
-        print("       ↓ \(a.nombre) (\(formatoBytes(a.tamano)))")
+        decir("       ↓ \(a.nombre) (\(formatoBytes(a.tamano)))")
         let tmp = temporal.appendingPathComponent(a.nombre)
         try? fm.removeItem(at: tmp)
-        return try await a.file.descargar(en: temporal, como: a.nombre)
+        // Avance: evento cada segundo; en Terminal, línea de % solo en archivos grandes (cada 10 %).
+        let grande = a.tamano > 200_000_000
+        let ultimo = Caja(-10)
+        let observador = self.observador
+        return try await a.file.descargar(en: temporal, como: a.nombre) { fraccion in
+            observador(.descarga(nombre: a.nombre, fraccion: fraccion, tamano: a.tamano))
+            let porcentaje = Int(fraccion * 100)
+            if grande && porcentaje >= ultimo.valor + 10 {
+                ultimo.valor = porcentaje
+                observador(.mensaje(String(format: "        … %d %%", porcentaje)))
+            }
+        }
     }
 
     private func tamano(de url: URL) -> Int64 {
@@ -340,4 +377,10 @@ public final class Transferencia {
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
+}
+
+/// Valor mutable compartido con un cierre.
+private final class Caja<T>: @unchecked Sendable {
+    var valor: T
+    init(_ v: T) { valor = v }
 }

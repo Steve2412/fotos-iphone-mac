@@ -4,7 +4,7 @@
 # La salida completa queda también en compilacion.log.
 set -o pipefail
 cd "$(dirname "$0")"
-if ! swift build -c release 2>&1 | tee compilacion.log; then
+if ! swift build -c release --product fotos-iphone 2>&1 | tee compilacion.log; then
     echo ""
     echo "❌ La compilación falló. El detalle está en compilacion.log"
     exit 1

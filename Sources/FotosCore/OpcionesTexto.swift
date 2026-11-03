@@ -108,7 +108,14 @@ extension Opciones {
         let nombres = Opciones.Origen.allCases.filter(origenes.contains).map(\.texto)
         l.append(tr("Orígenes: %@", nombres.joined(separator: ", ")))
         if origenes.contains(.camara) {
-            l.append(tr("Cámaras: %@", camaras?.joined(separator: ", ") ?? tr("cualquiera")))
+            let texto: String
+            if esteIPhone {
+                texto = modeloEsteIPhone.map { tr("este iPhone (%@)", $0) }
+                    ?? tr("este iPhone (se deduce de sus fotos recientes)")
+            } else {
+                texto = camaras?.joined(separator: ", ") ?? tr("cualquiera")
+            }
+            l.append(tr("Cámaras: %@", texto))
         }
         l.append(tr("Versiones: %@", versiones.texto))
         if versiones == .originalYEditada {

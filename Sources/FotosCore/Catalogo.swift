@@ -70,7 +70,13 @@ public final class Catalogo {
     /// y, si se indicaron --numero o --nombre, solo esos.
     public func elementos(segun c: Configuracion) throws -> [Elemento] {
         var r: [Elemento]
-        if c.porFechas {
+        if let informe = c.informe {
+            // Los candidatos salen del informe; si además se dio un periodo, solo los de ese periodo.
+            r = try InformeLeido.leer(informe).elementos(en: self)
+            if c.opciones.periodo != .todo {
+                r = r.filter { c.opciones.periodo.contiene($0.fecha) }
+            }
+        } else if c.porFechas {
             r = elementos(en: c.opciones.periodo)
         } else {
             var vistos = Set<ObjectIdentifier>()

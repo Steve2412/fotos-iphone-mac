@@ -21,7 +21,9 @@ final class PerfilesTests: XCTestCase {
         XCTAssertEqual(completo?.opciones.origenes, Set(Opciones.Origen.allCases))
         XCTAssertNil(completo?.opciones.camaras)
         let viaje = Perfiles.buscar("viaje", en: carpeta)
-        XCTAssertEqual(viaje?.opciones.camaras, ["iPhone 17 Pro"])
+        XCTAssertEqual(viaje?.opciones.esteIPhone, true)
+        XCTAssertNil(viaje?.opciones.camaras)
+        XCTAssertEqual(completo?.opciones.esteIPhone, false)
         XCTAssertEqual(viaje?.opciones.periodo, .rangoPorIndicar)
         XCTAssertEqual(viaje?.opciones.periodo.descripcion, "en el rango de fechas que indiques")
         XCTAssertEqual(Perfiles.buscar("respaldo ultimos dias", en: carpeta)?.opciones.periodo, .ultimosDias(7))
@@ -50,6 +52,81 @@ final class PerfilesTests: XCTestCase {
         let todos = Perfiles.todos(en: carpeta)
         XCTAssertEqual(todos.filter { $0.nombre == "Viaje" }.count, 1)
         XCTAssertEqual(Perfiles.buscar("viaje", en: carpeta)?.opciones.videos, false)
+    }
+
+    func testBorrarPerfilGuardado() throws {
+        try Perfiles.guardar(Perfil(nombre: "Boda", opciones: Opciones()), en: carpeta)
+        XCTAssertTrue(Perfiles.esGuardado("boda", en: carpeta))
+        try Perfiles.borrar("BODA", en: carpeta)
+        XCTAssertFalse(Perfiles.esGuardado("Boda", en: carpeta))
+        XCTAssertNil(Perfiles.buscar("Boda", en: carpeta))
+        XCTAssertThrowsError(try Perfiles.borrar("Boda", en: carpeta))
+    }
+
+    func testLosIntegradosNoSeBorran() throws {
+        XCTAssertThrowsError(try Perfiles.borrar("Respaldo completo", en: carpeta))
+        XCTAssertThrowsError(try Perfiles.borrar("Viaje", en: carpeta))
+        XCTAssertEqual(Perfiles.todos(en: carpeta).count, 3)
+    }
+
+    func testBorrarUnIntegradoActualizadoVuelveAlOriginal() throws {
+        var op = Opciones()
+        op.videos = false
+        try Perfiles.guardar(Perfil(nombre: "Viaje", opciones: op), en: carpeta)
+        XCTAssertEqual(Perfiles.buscar("Viaje", en: carpeta)?.opciones.videos, false)
+        try Perfiles.borrar("Viaje", en: carpeta)
+        XCTAssertEqual(Perfiles.buscar("Viaje", en: carpeta)?.opciones.videos, true)
+        XCTAssertEqual(Perfiles.todos(en: carpeta).count, 3)
+    }
+
+    func testPerfilAntiguoSinEsteIPhone() throws {
+        // Un perfil guardado antes de existir «este iPhone» conserva sus cámaras.
+        var op = Opciones()
+        op.esteIPhone = false
+        op.camaras = ["iPhone 17 Pro"]
+        var dic = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(op)) as? [String: Any])
+        XCTAssertNotNil(dic.removeValue(forKey: "esteIPhone"))
+        let leidas = try JSONDecoder().decode(Opciones.self, from: JSONSerialization.data(withJSONObject: dic))
+        XCTAssertFalse(leidas.esteIPhone)
+        XCTAssertEqual(leidas.camaras, ["iPhone 17 Pro"])
+    }
+
+    func testUltimaVezDeLaV02PasaAEsteIPhone() throws {
+        var op = Opciones()
+        op.esteIPhone = false
+        op.camaras = ["iPhone 17 Pro"]
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        var dic = try XCTUnwrap(JSONSerialization.jsonObject(with: e.encode(Perfil(nombre: "ultima-vez", opciones: op))) as? [String: Any])
+        var opciones = try XCTUnwrap(dic["opciones"] as? [String: Any])
+        opciones.removeValue(forKey: "esteIPhone")
+        dic["opciones"] = opciones
+        try FileManager.default.createDirectory(at: carpeta, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: dic).write(to: carpeta.appendingPathComponent("ultima-vez.json"))
+        let u = try XCTUnwrap(Perfiles.ultima(en: carpeta))
+        XCTAssertTrue(u.opciones.esteIPhone)
+        XCTAssertNil(u.opciones.camaras)
+    }
+
+    func testSinDeducciones() {
+        var op = Opciones()
+        op.camaras = ["iPhone 17 Pro"]
+        op.modeloEsteIPhone = "iPhone 17 Pro"
+        XCTAssertEqual(op.sinDeducciones, Opciones())
+    }
+
+    func testMesAnterior() {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "Europe/Madrid")!
+        let ahora = c.date(from: DateComponents(year: 2026, month: 11, day: 2, hour: 10))!
+        let (d, h) = Opciones.Periodo.mesAnterior.limites(ahora: ahora, calendario: c)
+        XCTAssertEqual(d, c.date(from: DateComponents(year: 2026, month: 10, day: 1)))
+        XCTAssertEqual(h, c.date(from: DateComponents(year: 2026, month: 10, day: 31, hour: 23, minute: 59, second: 59)))
+        // En enero, el mes pasado es diciembre del año anterior.
+        let enero = c.date(from: DateComponents(year: 2027, month: 1, day: 15))!
+        XCTAssertEqual(Opciones.Periodo.mesAnterior.limites(ahora: enero, calendario: c).desde,
+                       c.date(from: DateComponents(year: 2026, month: 12, day: 1)))
+        XCTAssertEqual(Opciones.Periodo.mesAnterior.descripcion.hasPrefix("del mes pasado ("), true)
     }
 
     func testUltimaVez() {

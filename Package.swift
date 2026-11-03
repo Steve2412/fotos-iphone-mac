@@ -6,15 +6,16 @@ import PackageDescription
 //                     y los textos traducidos (Resources/<idioma>.lproj). Se prueba sin iPhone.
 //   FotosIPhoneKit  → todo lo que habla con el iPhone (ImageCaptureCore, AVFoundation).
 //   fotos-iphone    → la herramienta de Terminal.
-// La app de la v0.3 usará FotosCore y FotosIPhoneKit.
+//   FotosIPhoneApp  → la app de Mac (SwiftUI). ./empaquetar-app.sh la monta como «Fotos iPhone.app».
 let package = Package(
     name: "fotos-iphone",
     defaultLocalization: "es",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "FotosCore", targets: ["FotosCore"]),
         .library(name: "FotosIPhoneKit", targets: ["FotosIPhoneKit"]),
         .executable(name: "fotos-iphone", targets: ["fotos-iphone"]),
+        .executable(name: "FotosIPhoneApp", targets: ["FotosIPhoneApp"]),
     ],
     targets: [
         .target(
@@ -35,6 +36,11 @@ let package = Package(
             name: "fotos-iphone",
             dependencies: ["FotosCore", "FotosIPhoneKit"],
             path: "Sources/fotos-iphone"
+        ),
+        .executableTarget(
+            name: "FotosIPhoneApp",
+            dependencies: ["FotosCore", "FotosIPhoneKit"],
+            path: "Sources/FotosIPhoneApp"
         ),
         .testTarget(
             name: "FotosCoreTests",

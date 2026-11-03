@@ -20,31 +20,36 @@ public final class ListaCamaras {
     let config: Configuracion
     let catalogo: Catalogo
 
+    /// Quién recibe los avisos (la Terminal imprime los mensajes).
+    public var observador: Observador = Observadores.terminal
+
     public init(config: Configuracion, catalogo: Catalogo) {
         self.config = config
         self.catalogo = catalogo
     }
 
+    private func decir(_ texto: String) { observador(.mensaje(texto)) }
+
     public func ejecutar() async {
         let conteos = await contar(en: config.opciones.periodo)
-        print(tr("\n📷 Cámaras y orígenes:"))
+        decir(tr("\n📷 Cámaras y orígenes:"))
         for c in conteos {
-            print(tr("   %@  ·  %ld fotos · %ld vídeos", c.etiqueta, c.fotos, c.videos))
+            decir(tr("   %@  ·  %ld fotos · %ld vídeos", c.etiqueta, c.fotos, c.videos))
         }
-        print(tr("\nPara elegir cámaras: --modelo \"iPhone 17 Pro\" (se puede repetir) o --cualquier-camara."))
+        decir(tr("\nPara elegir cámaras: --modelo \"iPhone 17 Pro\" (se puede repetir) o --cualquier-camara."))
     }
 
     /// Lee la cámara de cada elemento del periodo (con la caché, la segunda vez es rápido).
     public func contar(en periodo: Opciones.Periodo) async -> [ConteoCamara] {
         let elementos = catalogo.elementos(en: periodo)
         let lector = LectorCamara()
-        print(tr("📷 Leyendo la cámara de %ld elementos %@ (lo leído se recuerda para la próxima vez)…",
+        decir(tr("📷 Leyendo la cámara de %ld elementos %@ (lo leído se recuerda para la próxima vez)…",
                  elementos.count, periodo.descripcion))
 
         var conteos: [String: ConteoCamara] = [:]
         for (i, el) in elementos.enumerated() {
             if (i + 1) % 200 == 0 {
-                print(tr("   … %ld/%ld", i + 1, elementos.count))
+                decir(tr("   … %ld/%ld", i + 1, elementos.count))
                 lector.guardar()
             }
             let clave: (etiqueta: String, modelo: String?)
@@ -68,7 +73,7 @@ public final class ListaCamaras {
         }
         lector.guardar()
         if lector.videosSinLeer > 0 {
-            print(tr("   ⚠️  %ld vídeos sin cabecera legible: su cámara se comprueba al copiar.", lector.videosSinLeer))
+            decir(tr("   ⚠️  %ld vídeos sin cabecera legible: su cámara se comprueba al copiar.", lector.videosSinLeer))
         }
         return conteos.values.sorted { $0.total != $1.total ? $0.total > $1.total : $0.etiqueta < $1.etiqueta }
     }

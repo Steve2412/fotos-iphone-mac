@@ -34,7 +34,6 @@ public struct ResultadoBorrado {
 /// y en la raíz del destino (respaldos de la v0.1).
 ///
 /// Lo que no se eligió copiar (vídeo de la Live Photo, .AAE) se borra con su elemento, y el plan lo avisa.
-/// EXPERIMENTAL hasta probarlo con fotos de prueba.
 @MainActor
 public final class Borrado {
     let config: Configuracion
@@ -43,6 +42,14 @@ public final class Borrado {
     private let fm = FileManager.default
     private var manifiesto = Manifiesto()
     private let destino: URL
+    /// Quién recibe los avisos (la Terminal imprime los mensajes; la app usa los eventos).
+    public var observador: Observador = Observadores.terminal
+    /// Para detener el borrado desde la app (se para al terminar el elemento en curso). nil en la Terminal.
+    public var control: ControlCopia?
+    /// La carpeta del respaldo que se comprueba.
+    public var carpetaRespaldo: URL { destino }
+
+    private func decir(_ texto: String) { observador(.mensaje(texto)) }
 
     public init(config: Configuracion, catalogo: Catalogo, camara: ICCameraDevice) {
         self.config = config
@@ -57,11 +64,16 @@ public final class Borrado {
         guard fm.fileExists(atPath: destino.path) else {
             throw ErrorHerramienta.argumentos(tr("No existe la carpeta del respaldo: %@", destino.path))
         }
-        print(tr("🗂  Comprobando el respaldo en %@\n", destino.path))
+        decir(tr("🗂  Comprobando el respaldo en %@\n", destino.path))
         manifiesto = Manifiesto.leer(en: destino)
 
+        let candidatos = try catalogo.elementos(segun: config)
+        if let informe = config.informe {
+            decir(tr("📄 Según el informe %@: %ld elementos copiados que siguen en el iPhone.",
+                     informe.lastPathComponent, candidatos.count))
+        }
         var plan = PlanBorrado()
-        for el in try catalogo.elementos(segun: config) {
+        for el in candidatos {
             let necesarios = Borrado.imprescindibles(el)
             guard !necesarios.isEmpty else {
                 plan.noRespaldados.append(el)
@@ -106,26 +118,26 @@ public final class Borrado {
 
     /// Muestra el plan.
     public func mostrar(_ plan: PlanBorrado) {
-        print(tr("🧹 Se borrarían del iPhone %ld elementos (%ld archivos, %@).",
+        decir(tr("🧹 Se borrarían del iPhone %ld elementos (%ld archivos, %@).",
                  plan.aBorrar.count, plan.archivos.count, formatoBytes(plan.bytes)))
         if plan.aBorrar.count <= 20 {
             for el in plan.aBorrar {
-                print("   · \(el.etiqueta)  \(formatoFecha(el.fecha))  " + el.archivos.map(\.nombre).joined(separator: ", "))
+                decir("   · \(el.etiqueta)  \(formatoFecha(el.fecha))  " + el.archivos.map(\.nombre).joined(separator: ", "))
             }
         }
         if !plan.sinCopia.isEmpty {
             let nombres = plan.sinCopia.prefix(8).map(\.nombre).joined(separator: ", ")
-            print(tr("   ⚠️  %ld archivos se borrarían con su elemento sin estar en el respaldo (vídeos de Live Photos, .AAE…): %@%@",
+            decir(tr("   ⚠️  %ld archivos se borrarían con su elemento sin estar en el respaldo (vídeos de Live Photos, .AAE…): %@%@",
                      plan.sinCopia.count, nombres, plan.sinCopia.count > 8 ? "…" : ""))
-            print(tr("      Si los quieres conservar, cópialos antes (por ejemplo con --videos-live)."))
+            decir(tr("      Si los quieres conservar, cópialos antes (por ejemplo con --videos-live)."))
         }
-        print(tr("   No se tocan %ld elementos que no están en el respaldo.", plan.noRespaldados.count))
+        decir(tr("   No se tocan %ld elementos que no están en el respaldo.", plan.noRespaldados.count))
         if !plan.incompletos.isEmpty {
-            print(tr("   ⚠️  No se tocan %ld elementos con respaldo incompleto:", plan.incompletos.count))
+            decir(tr("   ⚠️  No se tocan %ld elementos con respaldo incompleto:", plan.incompletos.count))
             for i in plan.incompletos.prefix(20) {
-                print("      \(i.elemento.etiqueta): " + tr("falta %@", i.faltan.joined(separator: ", ")))
+                decir("      \(i.elemento.etiqueta): " + tr("falta %@", i.faltan.joined(separator: ", ")))
             }
-            if plan.incompletos.count > 20 { print("      …") }
+            if plan.incompletos.count > 20 { decir("      …") }
         }
     }
 
@@ -141,6 +153,10 @@ public final class Borrado {
         var borrados = 0
         var fallidos = 0
         for (i, el) in plan.aBorrar.enumerated() {
+            if let control, control.cancelado {
+                decir(tr("   ⏹  Borrado detenido: el resto no se ha tocado."))
+                break
+            }
             var pendientes = el.archivos
             var ultimoError: String?
             for _ in 0..<2 where !pendientes.isEmpty {
@@ -157,12 +173,14 @@ public final class Borrado {
                 informe += "\(el.etiqueta);\(a.nombre);\(resultado)\n"
                 if sigue { fallidos += 1 } else { borrados += 1 }
             }
+            observador(.borrando(indice: i + 1, total: plan.aBorrar.count, etiqueta: el.etiqueta,
+                                 pendientes: pendientes.map(\.nombre)))
             let progreso = "[\(i + 1)/\(plan.aBorrar.count)]"
             if pendientes.isEmpty {
-                print(tr("   %@ ✓ %@ borrado (comprobado en el iPhone)", progreso, el.etiqueta))
+                decir(tr("   %@ ✓ %@ borrado (comprobado en el iPhone)", progreso, el.etiqueta))
             } else {
                 let nota = ultimoError.map { " — \($0)" } ?? ""
-                print(tr("   %@ ✗ %@: sigue en el iPhone: %@", progreso, el.etiqueta,
+                decir(tr("   %@ ✗ %@: sigue en el iPhone: %@", progreso, el.etiqueta,
                          pendientes.map(\.nombre).joined(separator: ", ")) + nota)
             }
         }

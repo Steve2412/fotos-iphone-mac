@@ -145,7 +145,13 @@ final class OpcionesTextoTests: XCTestCase {
         var op = Opciones()
         op.videoMaximo = 2_000_000_000
         let r = op.resumen.joined(separator: "\n")
-        XCTAssertTrue(r.contains("Cámaras: iPhone 17 Pro"))
+        XCTAssertTrue(r.contains("Cámaras: este iPhone (se deduce de sus fotos recientes)"))
+        op.modeloEsteIPhone = "iPhone 17 Pro"
+        XCTAssertTrue(op.resumen.joined(separator: "\n").contains("Cámaras: este iPhone (iPhone 17 Pro)"))
+        var otra = Opciones()
+        otra.esteIPhone = false
+        otra.camaras = ["iPhone 15"]
+        XCTAssertTrue(otra.resumen.joined(separator: "\n").contains("Cámaras: iPhone 15"))
         XCTAssertTrue(r.contains("Versiones: original + editada"))
         XCTAssertTrue(r.contains("Vídeos: sí, hasta"))
         op.origenes = [.captura]

@@ -18,6 +18,9 @@ public final class Inspector {
     }
 
     public func ejecutar() async {
+        // «Este iPhone»: se deduce el modelo para decir si cada foto pasaría el filtro.
+        var op = config.opciones
+        try? await EsteIPhone.resolver(&op, catalogo: catalogo, lector: LectorCamara(), observador: Observadores.terminal)
         print(tr("📊 Tipos de archivo en el iPhone:"))
         let porTipo = Dictionary(grouping: catalogo.archivos) { a in
             (a.marca.isEmpty ? "" : "IMG_\(a.marca)… ") + "." + a.ext
@@ -51,7 +54,7 @@ public final class Inspector {
                 let dic = (try? await img.file.leerMetadatos()) ?? [:]
                 let info = DatosCamara.info(en: dic)
                 let origen = Reglas.origen(de: el, info: info, pantallas: catalogo.pantallas)
-                let ok = Reglas.motivoOrigen(origen, info: info, opciones: config.opciones) == nil
+                let ok = Reglas.motivoOrigen(origen, info: info, opciones: op) == nil
                 print(tr("   cámara: %@ / %@  · origen: %@  → %@", info.make ?? "—", info.model ?? "—", origen.texto, ok ? tr("pasa el filtro") : tr("se descartaría el elemento")))
                 // Pistas para verificar cómo se reconoce cada origen.
                 let tiff = dic["{TIFF}"] as? [AnyHashable: Any]
@@ -78,7 +81,7 @@ public final class Inspector {
                 if !conocido {
                     if let info = await lectorSinCache.infoVideo(video) {
                         let origen = Reglas.origen(de: el, info: info, pantallas: catalogo.pantallas)
-                        let ok = Reglas.motivoOrigen(origen, info: info, opciones: config.opciones) == nil
+                        let ok = Reglas.motivoOrigen(origen, info: info, opciones: op) == nil
                         print(tr("   cámara (cabecera del vídeo): %@ / %@  · origen: %@  → %@",
                                  info.make ?? "—", info.model ?? "—", origen.texto,
                                  ok ? tr("pasa el filtro") : tr("se descartaría el elemento")))
@@ -87,7 +90,7 @@ public final class Inspector {
                     }
                 }
             }
-            for d in Reglas.clasificar(el, config.opciones) {
+            for d in Reglas.clasificar(el, op) {
                 let a = d.archivo
                 let nombre = a.nombre.padding(toLength: 18, withPad: " ", startingAt: 0)
                 let tam = formatoBytes(a.tamano).padding(toLength: 10, withPad: " ", startingAt: 0)

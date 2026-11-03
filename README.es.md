@@ -5,7 +5,7 @@
 Herramienta para macOS que copia por **USB** las fotos y vídeos **originales** del iPhone al Mac
 (HEIC, DNG, MOV… sin conversión y con todos sus metadatos), usando `ImageCaptureCore`.
 
-> **Estado:** v0.2 en desarrollo. Funciona desde Terminal. La v0.3 añadirá una app de Mac (SwiftUI).
+> **Estado:** v0.3. Una **app de Mac** (SwiftUI) y una herramienta de **Terminal** sobre la misma biblioteca.
 
 ## Qué hace
 
@@ -26,7 +26,7 @@ Herramienta para macOS que copia por **USB** las fotos y vídeos **originales** 
 
 ## Requisitos
 
-- Mac con macOS 13 o posterior y las herramientas de desarrollo de Xcode.
+- Mac con macOS 14 o posterior y las herramientas de desarrollo de Xcode.
 - En el iPhone: *Ajustes → Apps → Fotos → Transferir a Mac o PC → **Conservar originales***.
 - Al copiar o simular: iPhone desbloqueado y conectado por cable, con el bloqueo automático en *Nunca*;
   **Captura de Imagen abierta** y Fotos cerrada en el Mac.
@@ -36,9 +36,33 @@ Herramienta para macOS que copia por **USB** las fotos y vídeos **originales** 
 ```bash
 ./compilar.sh     # deja ./fotos-iphone y sus traducciones; errores en compilacion.log
 ./probar.sh       # pruebas que no necesitan iPhone; salida en pruebas.log
+./empaquetar-app.sh && open "Fotos iPhone.app"   # la app de Mac; errores en compilacion-app.log
 ```
 
-## Uso
+## App de Mac
+
+`./empaquetar-app.sh` monta **Fotos iPhone.app** en la carpeta del proyecto (puedes moverla a
+Aplicaciones). Usa las mismas opciones, perfiles y cachés que la herramienta de Terminal.
+
+1. **Al abrirla** comprueba que Captura de Imagen está abierta y, si no, la abre (sin ella macOS no
+   entrega las fotos del iPhone). Si el catálogo no llega, avisa de qué hacer. Mientras conecta,
+   **Detener** corta el intento y **Reconectar** lo repite.
+2. **Opciones** (panel izquierdo): perfil, periodo (incluido *el mes pasado*), orígenes, cámaras
+   (*este iPhone*, deducido de sus fotos recientes; cualquiera; o elegidas), versiones, vídeos, RAW,
+   organización y destino. Los perfiles se guardan, se actualizan (lo confirma) y se borran
+   (salvo los integrados).
+3. **Simular** muestra qué se copiaría, qué ya está copiado y qué se descarta y por qué, con
+   miniaturas pedidas al iPhone (sin descargar los archivos). Al pulsar una se ve cada archivo.
+4. **Copiar…** solo se activa tras una simulación al día, y pide confirmación. Muestra progreso,
+   velocidad y tiempo restante; se puede **pausar**, **reanudar** y **cancelar** (al terminar el
+   archivo en curso). El Mac no se duerme durante la copia.
+5. **Borrar del iPhone** (selector de arriba): lo del periodo que esté en la carpeta de destino o
+   lo que copió una copia anterior (su `informe.csv`). Primero se **revisa** qué se borraría y,
+   para borrar, hay que escribir la clave («BORRAR 12»). Cada borrado se comprueba en el iPhone.
+6. Cerrar la ventana es salir. Con una copia o un borrado en curso, pide confirmación.
+7. **Ajustes** (⌘,): idioma de la app (el del sistema, español o inglés).
+
+## Terminal
 
 ### Asistente
 
@@ -59,15 +83,18 @@ Vienen tres integrados y puedes guardar los tuyos:
 |---|---|
 | Respaldo completo | Todo el carrete, de cualquier origen y cámara, original + editada, con vídeos de Live Photos, por año y mes |
 | Respaldo últimos días | Los últimos 7 días, de cualquier cámara, versión final, por día |
-| Viaje | Las fotos y vídeos del iPhone 17 Pro (como la v0.1) en el rango de fechas que indiques |
+| Viaje | Las fotos y vídeos de la cámara de este iPhone (como la v0.1) en el rango de fechas que indiques |
 
-Se guardan en `~/Library/Application Support/fotos-iphone/perfiles/`.
+Se guardan en `~/Library/Application Support/fotos-iphone/perfiles/`. Guardar con un nombre que ya existe lo actualiza (y lo confirma). Los integrados no se pueden borrar; si actualizas uno, borrar tu versión lo devuelve al original.
+
+«Este iPhone» es la cámara por defecto: el iPhone no dice su modelo por cable, así que se deduce de sus fotos recientes (las de la Cámara llevan el modelo en sus metadatos).
 
 ```bash
 ./fotos-iphone --perfiles                                   # ver los disponibles
 ./fotos-iphone --perfil "Respaldo completo" --destino ~/Pictures/iPhone
 ./fotos-iphone --perfil Viaje --desde 2026-10-01 --hasta 2026-10-15 --destino ~/Pictures/Viaje
 ./fotos-iphone --origenes capturas --organizar mes --guardar-perfil "Capturas"
+./fotos-iphone --borrar-perfil "Capturas"
 ```
 
 ### Con opciones
@@ -84,6 +111,9 @@ Una copia real siempre simula primero y pregunta; `--si` copia sin preguntar.
 # Capturas y archivos de otras apps de la última semana, organizados por meses
 ./fotos-iphone --dias 7 --origenes capturas,apps --organizar mes --simular
 
+# Todo lo del mes pasado (el mes natural anterior completo)
+./fotos-iphone --mes-pasado --destino ~/Pictures/Mes --simular
+
 # Todo el carrete, cualquier cámara, solo la versión final, vídeos de hasta 2 GB
 ./fotos-iphone --todo --origenes todo --cualquier-camara --versiones final --video-max 2GB --simular
 
@@ -99,9 +129,15 @@ Una copia real siempre simula primero y pregunta; `--si` copia sin preguntar.
 Todas las opciones se aceptan en español y en inglés (`--desde` = `--from`, `--destino` = `--dest`…).
 `--idioma en` o `--language es` fuerzan el idioma de los mensajes.
 
-> **Borrar del iPhone (`--borrar`) es experimental.** El borrado por cable es definitivo
-> (no pasa por «Eliminados recientemente») y, con Fotos de iCloud, también borra en iCloud.
-> Pide confirmación escrita y solo toca lo que está completo en el respaldo.
+> **Borrar del iPhone (`--borrar`).** El borrado por cable es definitivo (no pasa por
+> «Eliminados recientemente») y, con Fotos de iCloud, también borra en iCloud. Solo toca los
+> elementos cuyo original y edición están en el respaldo, pide escribir una clave y comprueba
+> después en el iPhone que cada foto se borró de verdad. Con `--informe informe.csv` los candidatos
+> salen del informe de una copia:
+>
+> ```bash
+> ./fotos-iphone --borrar --simular --informe ~/Pictures/Respaldo/informe.csv
+> ```
 
 ## Cómo reconoce el origen de cada archivo
 
@@ -122,6 +158,8 @@ Sources/FotosCore/        Lógica pura (sin iPhone): catálogo, opciones, reglas
   Resources/<idioma>.lproj/Localizable.strings
 Sources/FotosIPhoneKit/   Conexión con el iPhone, copia y borrado (ImageCaptureCore, AVFoundation)
 Sources/fotos-iphone/     Herramienta de Terminal
+Sources/FotosIPhoneApp/   App de Mac (SwiftUI)
+App/                      Info.plist, icono (AppIcon.icns) y su generador (generar-icono.py)
 Tests/FotosCoreTests/     Pruebas
 ```
 
@@ -139,7 +177,8 @@ Los perfiles y cachés se guardan fuera del proyecto, en `~/Library/Application 
 
 ## Hoja de ruta
 
-- **v0.2** (en curso): biblioteca Swift separada ✓, filtros configurables ✓, idiomas ✓,
-  asistente de preguntas ✓, perfiles ✓. Falta: probar el borrado con fotos de prueba.
-- **v0.3**: app de Mac en SwiftUI sobre la misma biblioteca: estado del iPhone, calendario y opciones,
-  vista previa de la simulación con miniaturas, copia con pausa y reanudación, y pantalla de borrado aparte.
+- **v0.2** ✓: biblioteca Swift separada, filtros configurables, idiomas, asistente de preguntas,
+  perfiles y borrado comprobado.
+- **v0.3** ✓: app de Mac en SwiftUI sobre la misma biblioteca: estado del iPhone, opciones y perfiles,
+  vista previa de la simulación con miniaturas, copia con pausa y reanudación, borrado desde la carpeta
+  o desde un `informe.csv`, idioma en Ajustes e icono.

@@ -61,7 +61,9 @@ final class ConfiguracionTests: XCTestCase {
         XCTAssertEqual(op.versiones, .originalYEditada)
         XCTAssertTrue(op.aae)
         XCTAssertFalse(op.videosLivePhoto)
-        XCTAssertEqual(op.camaras, ["iPhone 17 Pro"])
+        // Como la v0.1, pero la cámara ya no es fija: «este iPhone» se deduce al conectar.
+        XCTAssertTrue(op.esteIPhone)
+        XCTAssertNil(op.camaras)
         XCTAssertEqual(op.origenes, [.camara])
         XCTAssertEqual(op.organizacion, .plana)
     }

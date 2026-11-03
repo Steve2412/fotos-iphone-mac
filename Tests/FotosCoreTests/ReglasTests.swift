@@ -264,7 +264,9 @@ final class OrigenTests: XCTestCase {
     }
 
     func testFiltroPorDefectoComoLaV01() {
-        let op = Opciones()
+        // «Este iPhone» deducido como iPhone 17 Pro: el mismo filtro que la v0.1.
+        var op = Opciones()
+        op.camaras = ["iPhone 17 Pro"]
         XCTAssertNil(Reglas.motivoOrigen(.camara, info: iphone17, opciones: op))
         XCTAssertNil(Reglas.motivoOrigen(.camara, info: InfoCamara(make: "Apple", model: " iphone 17 pro "), opciones: op))
         XCTAssertEqual(Reglas.motivoOrigen(.camara, info: iphone15, opciones: op),
