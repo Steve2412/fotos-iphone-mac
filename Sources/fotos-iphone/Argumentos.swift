@@ -13,6 +13,10 @@ extension Configuracion {
         "--inspect": "--inspeccionar", "--dump": "--volcar",
         "--last": "--ultimos", "--number": "--numero", "--name": "--nombre",
         "--help": "--ayuda", "-h": "--ayuda", "--language": "--idioma",
+        "--all": "--todo", "--days": "--dias", "--versions": "--versiones",
+        "--no-aae": "--sin-aae", "--no-videos": "--sin-videos", "--max-video": "--video-max",
+        "--live-videos": "--videos-live", "--sources": "--origenes", "--any-camera": "--cualquier-camara",
+        "--layout": "--organizar", "--cameras": "--camaras",
     ]
 
     /// Busca --idioma / --language antes de leer lo demás, para que los errores salgan ya traducidos.
@@ -38,21 +42,36 @@ extension Configuracion {
     OPCIONES
       --desde AAAA-MM-DD Copia lo hecho desde ese día (incluido).
       --hasta AAAA-MM-DD …hasta ese día (incluido). Se usa en lugar de --lista.
+      --dias N           Los últimos N días (hoy incluido).
+      --todo             Todo el iPhone.
       --lista RUTA       Lista del álbum generada por el Atajo
                          (una línea por elemento: IMG_1234|2026-10-20T14:33:12).
       --destino RUTA     Carpeta donde se guardan los archivos y el informe.csv.
       --simular          Muestra qué se copiaría y qué se descartaría, sin copiar nada.
-      --modelo NOMBRE    Modelo de cámara aceptado (por defecto "iPhone 17 Pro"). Se puede repetir.
       --borrar           Borra del iPhone lo ya respaldado en --destino (pide confirmación;
                          con --simular solo muestra qué borraría). EXPERIMENTAL.
       --sha256           Añade al informe la huella SHA-256 de cada archivo copiado.
       --inspeccionar     Muestra cómo ve el Mac los archivos del iPhone (nombres, grupos, origen, cámara).
+      --camaras          Cuenta los elementos por cámara y origen (en el periodo, o en todo el iPhone).
       --volcar           Guarda en catalogo-iphone.csv todos los archivos que muestra el iPhone (diagnóstico).
       --ultimos N        Con --inspeccionar: los N elementos más recientes (30 por defecto).
       --numero N         Con --inspeccionar: solo el elemento IMG_N. Se puede repetir.
       --nombre NOMBRE    Con --inspeccionar: un archivo de otra app (p. ej. THQV8599). Se puede repetir.
       --idioma CÓDIGO    Idioma de los mensajes: es, en (por defecto, el del sistema).
       --ayuda            Muestra esta ayuda.
+
+    QUÉ COPIAR (por defecto, como la v0.1: fotos y vídeos del iPhone 17 Pro, original + editada)
+      --origenes LISTA   camara, capturas, grabaciones, apps (separados por comas) o todo.
+      --modelo NOMBRE    Modelo de cámara aceptado. Se puede repetir.
+      --cualquier-camara Acepta fotos y vídeos de cualquier cámara.
+      --versiones V      originales (solo el original) · final (la editada si existe)
+                         · ambas (original + editada).
+      --sin-aae          Sin las instrucciones de edición (.AAE).
+      --sin-videos       Sin vídeos.
+      --video-max TAM    Descarta vídeos mayores que TAM (p. ej. 2GB, 500MB).
+      --videos-live      Incluye los vídeos de las Live Photos.
+      --raw MODO         incluir · excluir · solo (solo fotos RAW/DNG).
+      --organizar MODO   plana (todo junto) · mes (2026/2026-10/) · dia (2026/2026-10/2026-10-20/).
 
       Todas las opciones se aceptan también en inglés (--from, --to, --dest, --simulate…).
 
@@ -67,6 +86,11 @@ extension Configuracion {
         var modelos: [String] = []
         var desde: Date?
         var hasta: Date?
+        var periodoDado = false
+        var cualquierCamara = false
+        func invalido(_ opcion: String, _ v: String, _ validos: String) -> ErrorHerramienta {
+            ErrorHerramienta.argumentos(tr("Valor no válido para %@: «%@». Valores posibles: %@.", opcion, v, validos))
+        }
         func valor(_ opcion: String) throws -> String {
             i += 1
             guard i < argumentos.count else {
@@ -114,6 +138,39 @@ extension Configuracion {
                 nombres.append(((try valor(arg)) as NSString).deletingPathExtension)
             case "--idioma":
                 idioma = try valor(arg)
+            case "--todo":
+                periodoDado = true
+                opciones.periodo = .todo
+            case "--dias":
+                let v = try valor(arg)
+                guard let n = Int(v), n > 0 else { throw ErrorHerramienta.argumentos(tr("%@ necesita un número: %@", arg, v)) }
+                periodoDado = true
+                opciones.periodo = .ultimosDias(n)
+            case "--versiones":
+                let v = try valor(arg)
+                guard let x = Opciones.Versiones(texto: v) else { throw invalido(arg, v, tr("originales, final, ambas")) }
+                opciones.versiones = x
+            case "--sin-aae": opciones.aae = false
+            case "--sin-videos": opciones.videos = false
+            case "--video-max":
+                let v = try valor(arg)
+                guard let b = Opciones.bytes(v) else { throw invalido(arg, v, "2GB, 500MB") }
+                opciones.videoMaximo = b
+            case "--videos-live": opciones.videosLivePhoto = true
+            case "--raw":
+                let v = try valor(arg)
+                guard let x = Opciones.ModoRAW(texto: v) else { throw invalido(arg, v, tr("incluir, excluir, solo")) }
+                opciones.raw = x
+            case "--origenes":
+                let v = try valor(arg)
+                guard let x = Opciones.Origen.conjunto(v) else { throw invalido(arg, v, tr("camara, capturas, grabaciones, apps, todo")) }
+                opciones.origenes = x
+            case "--cualquier-camara": cualquierCamara = true
+            case "--organizar":
+                let v = try valor(arg)
+                guard let x = Opciones.Organizacion(texto: v) else { throw invalido(arg, v, tr("plana, mes, dia")) }
+                opciones.organizacion = x
+            case "--camaras": modo = .camaras
             case "--ayuda":
                 print(Configuracion.ayuda)
                 exit(0)
@@ -123,12 +180,20 @@ extension Configuracion {
             i += 1
         }
 
+        if cualquierCamara && !modelos.isEmpty {
+            throw ErrorHerramienta.argumentos(tr("Usa --modelo o --cualquier-camara, no los dos."))
+        }
         if !modelos.isEmpty { opciones.camaras = modelos }
-        if desde != nil || hasta != nil { opciones.periodo = .rango(desde: desde, hasta: hasta) }
+        if cualquierCamara { opciones.camaras = nil }
+        if desde != nil || hasta != nil {
+            if periodoDado { throw ErrorHerramienta.argumentos(tr("Usa un solo periodo: --desde/--hasta, --dias o --todo.")) }
+            opciones.periodo = .rango(desde: desde, hasta: hasta)
+            periodoDado = true
+        }
 
         if modo == .transferir {
-            guard lista != nil || desde != nil || hasta != nil else {
-                throw ErrorHerramienta.argumentos(tr("Indica --desde/--hasta, o la lista del álbum con --lista (o usa --inspeccionar)."))
+            guard lista != nil || periodoDado else {
+                throw ErrorHerramienta.argumentos(tr("Indica el periodo (--desde/--hasta, --dias N o --todo) o la lista del álbum con --lista."))
             }
             if let d = desde, let h = hasta, d > h {
                 throw ErrorHerramienta.argumentos(tr("--desde es posterior a --hasta."))

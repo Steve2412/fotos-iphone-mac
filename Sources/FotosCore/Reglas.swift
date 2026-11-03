@@ -216,7 +216,7 @@ public enum Reglas {
 }
 
 /// Lo que se sabe de la cámara de un elemento.
-public struct InfoCamara: Equatable, Sendable {
+public struct InfoCamara: Codable, Equatable, Sendable {
     public var make: String?
     public var model: String?
     /// Comentario EXIF (UserComment): iOS pone «Screenshot» en las capturas de pantalla.

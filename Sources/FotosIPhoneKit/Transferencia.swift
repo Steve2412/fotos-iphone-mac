@@ -7,6 +7,8 @@ public final class Transferencia {
     let config: Configuracion
     let catalogo: Catalogo
     let informe = Informe()
+    let lector: LectorCamara
+    private var manifiesto = Manifiesto()
     private let fm = FileManager.default
     private var destino: URL!
     private var temporal: URL!
@@ -16,9 +18,14 @@ public final class Transferencia {
     public init(config: Configuracion, catalogo: Catalogo) {
         self.config = config
         self.catalogo = catalogo
+        self.lector = LectorCamara()
     }
 
     public func ejecutar() async throws {
+        print(tr("⚙️  Opciones:"))
+        for linea in op.resumen { print("   · " + linea) }
+        print("")
+
         let entradas: [EntradaAlbum]
         var directos: [Int: Elemento] = [:]
         if config.porFechas {
@@ -38,10 +45,11 @@ public final class Transferencia {
         if config.simular {
             print(tr("🧪 Simulación: no se copiará nada.\n"))
         } else {
-            destino = config.destino!
+            destino = config.destino!.standardizedFileURL
             temporal = destino.appendingPathComponent(".temporal-fotos-iphone", isDirectory: true)
             try? fm.removeItem(at: temporal)
             try fm.createDirectory(at: temporal, withIntermediateDirectories: true)
+            manifiesto = Manifiesto.leer(en: destino)
             print(tr("📂 Destino: %@\n", destino.path))
         }
 
@@ -63,18 +71,25 @@ public final class Transferencia {
             }
             if !config.simular {
                 try? informe.escribir(en: destino.appendingPathComponent("informe.csv"))
+                try? manifiesto.escribir(en: destino)
             }
+            if (i + 1) % 200 == 0 { lector.guardar() }
         }
+        lector.guardar()
 
         let rutaInforme: URL
         if config.simular {
             rutaInforme = URL(fileURLWithPath: fm.currentDirectoryPath).appendingPathComponent("informe-simulacion.csv")
         } else {
             try? fm.removeItem(at: temporal)
+            try? manifiesto.escribir(en: destino)
             rutaInforme = destino.appendingPathComponent("informe.csv")
         }
         try informe.escribir(en: rutaInforme)
         print("\n" + informe.resumen())
+        if lector.videosSinLeer > 0 {
+            print(tr("   ⚠️  %ld vídeos sin cabecera legible: su cámara se comprueba al copiar.", lector.videosSinLeer))
+        }
         print(tr("📄 Informe: %@", rutaInforme.path))
     }
 
@@ -107,48 +122,48 @@ public final class Transferencia {
         // 1. ¿Su origen (cámara, captura, grabación, otra app) y su cámara están elegidos?
         var videoEnTemporal: URL?
         let pantallas = catalogo.pantallas
+        func motivoOrigen(_ info: InfoCamara?) -> Motivo? {
+            Reglas.motivoOrigen(Reglas.origen(de: el, info: info, pantallas: pantallas), info: info, opciones: op)
+        }
         if Reglas.necesitaMetadatos(op) {
             if el.numero == nil || Reglas.esGrabacionDePantalla(el, pantallas: pantallas) {
                 // Otra app (nombre que no es IMG_) o grabación de pantalla (resolución de pantalla):
                 // el origen se sabe sin leer metadatos ni descargar nada.
-                let origen = Reglas.origen(de: el, info: nil, pantallas: pantallas)
-                if let m = Reglas.motivoOrigen(origen, info: nil, opciones: op) {
-                    return descartarTodo(m)
-                }
+                if let m = motivoOrigen(nil) { return descartarTodo(m) }
             } else if let img = el.imagenOriginal {
-                let dic = (try? await img.file.leerMetadatos()) ?? [:]
-                let info = DatosCamara.info(en: dic)
-                if let m = Reglas.motivoOrigen(Reglas.origen(de: el, info: info, pantallas: pantallas), info: info, opciones: op) {
-                    return descartarTodo(m)
-                }
+                let info = await lector.infoFoto(img)
+                if let m = motivoOrigen(info) { return descartarTodo(m) }
             } else if let video = el.videoOriginal {
-                if config.simular {
+                if let info = await lector.infoVideo(video) {
+                    // Leída de la cabecera del vídeo, sin descargarlo.
+                    if let m = motivoOrigen(info) { return descartarTodo(m) }
+                } else if config.simular {
                     for d in decisiones {
                         if d.conservar { registrar(d, .seCopiaria, tr("la cámara del vídeo se comprueba al copiar")) }
                         else { registrar(d, .descartado, d.motivo?.texto ?? "") }
                     }
                     return
-                }
-                do {
-                    // En los vídeos los datos de cámara van dentro del archivo: hay que copiarlo para leerlos.
-                    let existente = destino.appendingPathComponent(
-                        Reglas.rutaRelativa(nombre: video.nombre, fecha: el.fecha, organizacion: op.organizacion))
-                    let url: URL
-                    if yaCopiado(video, en: existente) {
-                        url = existente
-                    } else {
-                        url = try await descargarTemporal(video)
-                        videoEnTemporal = url
+                } else {
+                    do {
+                        // No se pudo leer la cabecera: se descarga el vídeo para leer su cámara.
+                        let url: URL
+                        if let existente = rutaExistente(video, para: el) {
+                            url = existente
+                        } else {
+                            url = try await descargarTemporal(video)
+                            videoEnTemporal = url
+                        }
+                        let (make, model) = await DatosCamara.makeModelDeVideo(url)
+                        let info = InfoCamara(make: make, model: model)
+                        lector.recordar(video, info)
+                        if let m = motivoOrigen(info) {
+                            if let t = videoEnTemporal { try? fm.removeItem(at: t) }
+                            return descartarTodo(m)
+                        }
+                    } catch {
+                        for d in decisiones { registrar(d, .error, error.localizedDescription) }
+                        return
                     }
-                    let (make, model) = await DatosCamara.makeModelDeVideo(url)
-                    let info = InfoCamara(make: make, model: model)
-                    if let m = Reglas.motivoOrigen(Reglas.origen(de: el, info: info, pantallas: pantallas), info: info, opciones: op) {
-                        if let t = videoEnTemporal { try? fm.removeItem(at: t) }
-                        return descartarTodo(m)
-                    }
-                } catch {
-                    for d in decisiones { registrar(d, .error, error.localizedDescription) }
-                    return
                 }
             }
         }
@@ -167,11 +182,14 @@ public final class Transferencia {
                 registrar(d, .seCopiaria, formatoBytes(d.archivo.tamano))
                 continue
             }
-            var final = destino.appendingPathComponent(d.rutaRelativa)
-            if yaCopiado(d.archivo, en: final) {
+            if let existente = rutaExistente(d.archivo, para: el) {
+                // Ya copiado antes (según el manifiesto, o en su ruta con el mismo tamaño).
+                manifiesto.registrar(d.archivo, ruta: relativa(existente), elemento: el.etiqueta,
+                                     sha256: manifiesto.entradas[d.archivo.identidad]?.sha256)
                 registrar(d, .yaExistia)
                 continue
             }
+            var final = destino.appendingPathComponent(d.rutaRelativa)
             var nota = ""
             if fm.fileExists(atPath: final.path) {
                 // Mismo nombre pero distinto archivo (el contador IMG_ dio la vuelta).
@@ -196,6 +214,9 @@ public final class Transferencia {
                     try? fm.setAttributes([.creationDate: fecha, .modificationDate: fecha], ofItemAtPath: final.path)
                 }
                 let sha = op.sha256 ? ((try? sha256(final)) ?? "") : ""
+                if tam == d.archivo.tamano {
+                    manifiesto.registrar(d.archivo, ruta: relativa(final), elemento: el.etiqueta, sha256: sha)
+                }
                 registrar(d, tam == d.archivo.tamano ? .copiado : .copiadoConAviso, nota, sha: sha)
             } catch {
                 registrar(d, .error, error.localizedDescription)
@@ -204,6 +225,25 @@ public final class Transferencia {
     }
 
     // MARK: Archivos
+
+    /// Dónde está ya copiado este archivo con el tamaño correcto: primero según el manifiesto
+    /// (sirve aunque se renombrara o se cambiara la organización), luego en su ruta prevista.
+    private func rutaExistente(_ a: Archivo, para el: Elemento) -> URL? {
+        if let r = manifiesto.ruta(de: a) {
+            let url = destino.appendingPathComponent(r)
+            if yaCopiado(a, en: url) { return url }
+        }
+        let prevista = destino.appendingPathComponent(
+            Reglas.rutaRelativa(nombre: a.nombre, fecha: el.fecha, organizacion: op.organizacion))
+        return yaCopiado(a, en: prevista) ? prevista : nil
+    }
+
+    /// Ruta de `url` relativa a la carpeta de destino.
+    private func relativa(_ url: URL) -> String {
+        let base = destino.path.hasSuffix("/") ? destino.path : destino.path + "/"
+        let ruta = url.standardizedFileURL.path
+        return ruta.hasPrefix(base) ? String(ruta.dropFirst(base.count)) : url.lastPathComponent
+    }
 
     private func descargarTemporal(_ a: Archivo) async throws -> URL {
         print("       ↓ \(a.nombre) (\(formatoBytes(a.tamano)))")

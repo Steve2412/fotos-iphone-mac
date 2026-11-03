@@ -18,8 +18,10 @@ Herramienta para macOS que copia por **USB** las fotos y vídeos **originales** 
   original + editada), `.AAE`, vídeos (con tamaño máximo), vídeos de Live Photos, RAW, orígenes y
   cámaras, y organización del destino (carpeta única, por año y mes, o por día).
 - **Simula** antes de copiar: muestra qué se copiaría y qué se descartaría, y por qué.
+- Lee la cámara de los vídeos leyendo solo su cabecera (unos KB), sin descargarlos.
 - Copia de forma segura: descarga a una carpeta temporal, comprueba el tamaño y luego mueve al destino.
-  Se puede interrumpir y reanudar (lo ya copiado se salta). Genera un `informe.csv`.
+  Se puede interrumpir y reanudar (lo ya copiado se salta). Genera un `informe.csv` y un manifiesto
+  (`.fotos-iphone/manifiesto.json` en el destino) con dónde quedó cada archivo.
 - Mensajes en **español e inglés** (preparado para añadir más idiomas).
 
 ## Requisitos
@@ -44,6 +46,15 @@ Herramienta para macOS que copia por **USB** las fotos y vídeos **originales** 
 
 # Copia real
 ./fotos-iphone --desde 2026-10-01 --hasta 2026-10-31 --destino ~/Pictures/Respaldo-iPhone
+
+# Capturas y archivos de otras apps de la última semana, organizados por meses
+./fotos-iphone --dias 7 --origenes capturas,apps --organizar mes --simular
+
+# Todo el carrete, cualquier cámara, solo la versión final, vídeos de hasta 2 GB
+./fotos-iphone --todo --origenes todo --cualquier-camara --versiones final --video-max 2GB --simular
+
+# ¿Qué cámaras y orígenes hay en el iPhone?
+./fotos-iphone --camaras
 
 # Ver cómo reconoce el Mac los últimos elementos (origen, cámara, grupos…)
 ./fotos-iphone --inspeccionar --ultimos 20

@@ -43,6 +43,8 @@ final class Programa {
         switch config.modo {
         case .inspeccionar:
             await Inspector(config: config, catalogo: catalogo).ejecutar()
+        case .camaras:
+            await ListaCamaras(config: config, catalogo: catalogo).ejecutar()
         case .volcar:
             try Volcado.escribir(camara: camara)
         case .transferir where config.borrar:

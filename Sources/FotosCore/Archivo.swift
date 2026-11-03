@@ -26,6 +26,12 @@ public final class Archivo {
     public var esRAW: Bool { ext == "DNG" }
     public var resolucion: Resolucion? { ancho > 0 && alto > 0 ? Resolucion(ancho, alto) : nil }
 
+    /// Identifica un archivo del iPhone entre ejecuciones (el nombre solo no basta:
+    /// el contador IMG_ da la vuelta). Se usa en el manifiesto y en la caché de cámaras.
+    public var identidad: String {
+        "\(nombre)|\(tamano)|\(Int64((fecha?.timeIntervalSince1970 ?? 0).rounded()))"
+    }
+
     public init(nombre: String, tamano: Int64, fecha: Date?, grupo: String?,
                 ancho: Int = 0, alto: Int = 0, origen: AnyObject? = nil) {
         self.nombre = nombre

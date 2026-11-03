@@ -8,10 +8,13 @@ import FotosCore
 public final class Inspector {
     let config: Configuracion
     let catalogo: Catalogo
+    /// Para comprobar el lector de cabeceras: siempre lee del iPhone.
+    private let lectorSinCache: LectorCamara
 
     public init(config: Configuracion, catalogo: Catalogo) {
         self.config = config
         self.catalogo = catalogo
+        self.lectorSinCache = LectorCamara(usarCache: false)
     }
 
     public func ejecutar() async {
@@ -64,7 +67,7 @@ public final class Inspector {
                 if !pistas.isEmpty { print("   " + pistas.joined(separator: " · ")) }
             } else if let video = el.videoOriginal {
                 let conocido = el.numero == nil || Reglas.esGrabacionDePantalla(el, pantallas: catalogo.pantallas)
-                let origen = conocido ? Reglas.origen(de: el, info: nil, pantallas: catalogo.pantallas).texto : tr("(en vídeos se comprueba al copiar)")
+                let origen = conocido ? Reglas.origen(de: el, info: nil, pantallas: catalogo.pantallas).texto : tr("(se deduce de la cámara del vídeo)")
                 print(tr("   origen: %@", origen))
                 // Pistas que da el iPhone sin descargar el vídeo, para distinguir grabaciones
                 // de pantalla de vídeos de otras apps.
@@ -74,15 +77,17 @@ public final class Inspector {
                               "uti: \(f.uti ?? "—")"]
                 if let carpeta = f.parentFolder?.name { pistas.append(tr("carpeta: %@", carpeta)) }
                 print("   " + pistas.joined(separator: " · "))
-                // Experimento: ¿da el iPhone metadatos de un vídeo sin descargarlo?
-                do {
-                    let dic = try await f.leerMetadatos()
-                    let info = DatosCamara.info(en: dic)
-                    let claves = dic.keys.map { "\($0)" }.sorted().prefix(12).joined(separator: ", ")
-                    print(tr("   metadatos sin descargar: %ld claves (%@) · cámara: %@ / %@",
-                             dic.count, claves, info.make ?? "—", info.model ?? "—"))
-                } catch {
-                    print(tr("   metadatos sin descargar: no disponibles (%@)", error.localizedDescription))
+                // Cámara leída de la cabecera del vídeo (unos KB), sin descargarlo ni usar la caché.
+                if !conocido {
+                    if let info = await lectorSinCache.infoVideo(video) {
+                        let origen = Reglas.origen(de: el, info: info, pantallas: catalogo.pantallas)
+                        let ok = Reglas.motivoOrigen(origen, info: info, opciones: config.opciones) == nil
+                        print(tr("   cámara (cabecera del vídeo): %@ / %@  · origen: %@  → %@",
+                                 info.make ?? "—", info.model ?? "—", origen.texto,
+                                 ok ? tr("pasa el filtro") : tr("se descartaría el elemento")))
+                    } else {
+                        print(tr("   cámara (cabecera del vídeo): no se pudo leer; se comprobaría al copiar"))
+                    }
                 }
             }
             for d in Reglas.clasificar(el, config.opciones) {

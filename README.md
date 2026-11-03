@@ -18,8 +18,10 @@ A macOS tool that copies the **original** photos and videos from an iPhone to a 
   original + edited), `.AAE`, videos (with a maximum size), Live Photo videos, RAW, sources and
   cameras, and destination layout (single folder, by year and month, or by day).
 - **Simulates** before copying: shows what would be copied, what would be skipped, and why.
+- Reads the camera of videos from their header only (a few KB), without downloading them.
 - Copies safely: downloads to a temporary folder, checks the size, then moves it into place.
-  It can be interrupted and resumed (what was already copied is skipped). Writes an `informe.csv` report.
+  It can be interrupted and resumed (what was already copied is skipped). Writes an `informe.csv` report
+  and a manifest (`.fotos-iphone/manifiesto.json` in the destination) recording where each file went.
 - Messages in **English and Spanish** (ready for more languages).
 
 ## Requirements
@@ -44,6 +46,15 @@ A macOS tool that copies the **original** photos and videos from an iPhone to a 
 
 # Real copy
 ./fotos-iphone --from 2026-10-01 --to 2026-10-31 --dest ~/Pictures/iPhone-Backup
+
+# Screenshots and files from other apps from the last week, organized by month
+./fotos-iphone --days 7 --sources screenshots,apps --layout month --simulate
+
+# The whole camera roll, any camera, final version only, videos up to 2 GB
+./fotos-iphone --all --sources all --any-camera --versions final --max-video 2GB --simulate
+
+# Which cameras and sources are on the iPhone?
+./fotos-iphone --cameras
 
 # See how the Mac recognizes the latest items (source, camera, groups…)
 ./fotos-iphone --inspect --last 20

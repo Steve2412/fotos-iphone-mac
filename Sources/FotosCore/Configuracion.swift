@@ -29,7 +29,7 @@ public enum ErrorHerramienta: LocalizedError {
 /// Parámetros de una ejecución: qué hacer y dónde. Qué se copia está en `opciones`.
 /// La lectura de los argumentos de Terminal está en el módulo de la herramienta.
 public struct Configuracion {
-    public enum Modo { case inspeccionar, volcar, transferir }
+    public enum Modo { case inspeccionar, volcar, transferir, camaras }
 
     public var modo: Modo = .transferir
     /// Lista del álbum generada por el Atajo (alternativa al periodo).

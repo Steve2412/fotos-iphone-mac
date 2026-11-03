@@ -12,6 +12,7 @@ public final class Borrado {
     let catalogo: Catalogo
     let camara: ICCameraDevice
     private let fm = FileManager.default
+    private var manifiesto = Manifiesto()
 
     public init(config: Configuracion, catalogo: Catalogo, camara: ICCameraDevice) {
         self.config = config
@@ -27,6 +28,7 @@ public final class Borrado {
             throw ErrorHerramienta.argumentos(tr("No existe la carpeta del respaldo: %@", destino.path))
         }
         print(tr("🗂  Comprobando el respaldo en %@\n", destino.path))
+        manifiesto = Manifiesto.leer(en: destino)
 
         var aBorrar: [Elemento] = []
         var noRespaldados = 0
@@ -116,7 +118,8 @@ public final class Borrado {
         var presentes = 0
         for d in guardables {
             let a = d.archivo
-            let url = destino.appendingPathComponent(d.rutaRelativa)
+            // Donde lo apuntó la copia (manifiesto) o, si no consta, donde le tocaría ir.
+            let url = destino.appendingPathComponent(manifiesto.ruta(de: a) ?? d.rutaRelativa)
             let attrs = try? fm.attributesOfItem(atPath: url.path)
             let tam = (attrs?[.size] as? NSNumber)?.int64Value
             if tam == a.tamano { presentes += 1 }
