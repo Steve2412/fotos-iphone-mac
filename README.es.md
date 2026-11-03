@@ -40,8 +40,42 @@ Herramienta para macOS que copia por **USB** las fotos y vídeos **originales** 
 
 ## Uso
 
+### Asistente
+
+Sin opciones, la herramienta pregunta paso a paso qué copiar (periodo, orígenes, cámaras detectadas
+en el iPhone, versiones, vídeos, RAW, organización y destino), con lo elegido la última vez como
+respuesta por defecto. Al final simula, muestra qué se copiaría, qué se descarta y por qué, y si cabe
+en el disco, y **pide confirmación antes de copiar**. Las opciones se pueden guardar como perfil.
+
 ```bash
-# Siempre primero una simulación
+./fotos-iphone
+```
+
+### Perfiles
+
+Vienen tres integrados y puedes guardar los tuyos:
+
+| Perfil | Qué copia |
+|---|---|
+| Respaldo completo | Todo el carrete, de cualquier origen y cámara, original + editada, con vídeos de Live Photos, por año y mes |
+| Respaldo últimos días | Los últimos 7 días, de cualquier cámara, versión final, por día |
+| Viaje | Las fotos y vídeos del iPhone 17 Pro (como la v0.1) en el rango de fechas que indiques |
+
+Se guardan en `~/Library/Application Support/fotos-iphone/perfiles/`.
+
+```bash
+./fotos-iphone --perfiles                                   # ver los disponibles
+./fotos-iphone --perfil "Respaldo completo" --destino ~/Pictures/iPhone
+./fotos-iphone --perfil Viaje --desde 2026-10-01 --hasta 2026-10-15 --destino ~/Pictures/Viaje
+./fotos-iphone --origenes capturas --organizar mes --guardar-perfil "Capturas"
+```
+
+### Con opciones
+
+Una copia real siempre simula primero y pregunta; `--si` copia sin preguntar.
+
+```bash
+# Simulación detallada
 ./fotos-iphone --desde 2026-10-01 --hasta 2026-10-31 --simular
 
 # Copia real
@@ -105,7 +139,7 @@ Los perfiles y cachés se guardan fuera del proyecto, en `~/Library/Application 
 
 ## Hoja de ruta
 
-- **v0.2** (en curso): biblioteca Swift separada, filtros configurables, asistente de preguntas,
-  perfiles guardados («Viaje», «Respaldo completo»…).
+- **v0.2** (en curso): biblioteca Swift separada ✓, filtros configurables ✓, idiomas ✓,
+  asistente de preguntas ✓, perfiles ✓. Falta: probar el borrado con fotos de prueba.
 - **v0.3**: app de Mac en SwiftUI sobre la misma biblioteca: estado del iPhone, calendario y opciones,
   vista previa de la simulación con miniaturas, copia con pausa y reanudación, y pantalla de borrado aparte.

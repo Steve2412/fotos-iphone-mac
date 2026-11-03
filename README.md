@@ -40,8 +40,42 @@ A macOS tool that copies the **original** photos and videos from an iPhone to a 
 
 ## Usage
 
+### Assistant
+
+With no options, the tool asks step by step what to copy (period, sources, cameras found on the
+iPhone, versions, videos, RAW, layout and destination), using your last choices as defaults. At the
+end it simulates, shows what would be copied, what is skipped and why, and whether it fits on the
+disk, and **asks for confirmation before copying**. The options can be saved as a profile.
+
 ```bash
-# Always simulate first
+./fotos-iphone
+```
+
+### Profiles
+
+Three come built in and you can save your own:
+
+| Profile | What it copies |
+|---|---|
+| Full backup | The whole camera roll, any source and camera, original + edited, with Live Photo videos, by year and month |
+| Recent days backup | The last 7 days, any camera, final version, by day |
+| Trip | iPhone 17 Pro photos and videos (like v0.1) in the date range you give |
+
+They are stored in `~/Library/Application Support/fotos-iphone/perfiles/`.
+
+```bash
+./fotos-iphone --profiles                                   # list them
+./fotos-iphone --profile "Full backup" --dest ~/Pictures/iPhone
+./fotos-iphone --profile Trip --from 2026-10-01 --to 2026-10-15 --dest ~/Pictures/Trip
+./fotos-iphone --sources screenshots --layout month --save-profile "Screenshots"
+```
+
+### With options
+
+A real copy always simulates first and asks; `--yes` copies without asking.
+
+```bash
+# Detailed simulation
 ./fotos-iphone --from 2026-10-01 --to 2026-10-31 --simulate
 
 # Real copy
@@ -107,7 +141,7 @@ in `~/Library/Application Support/fotos-iphone/`.
 
 ## Roadmap
 
-- **v0.2** (in progress): separate Swift library, configurable filters, interactive assistant,
-  saved profiles (“Trip”, “Full backup”…).
+- **v0.2** (in progress): separate Swift library ✓, configurable filters ✓, languages ✓,
+  interactive assistant ✓, profiles ✓. Pending: test deletion with test photos.
 - **v0.3**: SwiftUI Mac app on the same library: iPhone status, calendar and options, simulation
   preview with thumbnails, copy with pause and resume, and a separate delete screen.

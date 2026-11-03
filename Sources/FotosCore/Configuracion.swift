@@ -8,6 +8,7 @@ public enum ErrorHerramienta: LocalizedError {
     case sesion(String)
     case lista(String)
     case copia(String)
+    case cancelado
 
     public var errorDescription: String? {
         switch self {
@@ -22,6 +23,7 @@ public enum ErrorHerramienta: LocalizedError {
             return tr("No se pudo abrir la sesión con el iPhone: %@\n   Prueba a desconectar el cable y volver a conectarlo con el iPhone ya desbloqueado.\n   Si sigue igual, abre Captura de Imagen en el Mac: si ahí tampoco se ven las fotos,\n   el iPhone no confía en este Mac (se arregla en el iPhone con Ajustes → General →\n   Transferir o restablecer → Restablecer → Restablecer localización y privacidad).", m)
         case .lista(let m): return m
         case .copia(let m): return m
+        case .cancelado: return tr("Cancelado. No se ha copiado nada.")
         }
     }
 }
@@ -29,7 +31,15 @@ public enum ErrorHerramienta: LocalizedError {
 /// Parámetros de una ejecución: qué hacer y dónde. Qué se copia está en `opciones`.
 /// La lectura de los argumentos de Terminal está en el módulo de la herramienta.
 public struct Configuracion {
-    public enum Modo { case inspeccionar, volcar, transferir, camaras }
+    public enum Modo {
+        case inspeccionar, volcar, transferir, camaras
+        /// Preguntas paso a paso (sin argumentos, o con --asistente).
+        case asistente
+        /// Mostrar los perfiles (no necesita el iPhone).
+        case perfiles
+        /// Solo guardar un perfil (no necesita el iPhone).
+        case guardarPerfil
+    }
 
     public var modo: Modo = .transferir
     /// Lista del álbum generada por el Atajo (alternativa al periodo).
@@ -44,6 +54,16 @@ public struct Configuracion {
     /// Código de idioma pedido con --idioma (nil = el del sistema).
     public var idioma: String?
     public var opciones = Opciones()
+    /// Perfil cargado con --perfil (sus opciones ya están en `opciones`).
+    public var perfil: String?
+    /// Nombre con el que guardar las opciones (--guardar-perfil).
+    public var guardarPerfil: String?
+    /// Antes de una copia real: simular, mostrar el resumen y pedir confirmación (--si lo salta).
+    public var confirmar = true
+    /// Mostrar cada archivo (en las simulaciones previas a confirmar solo se muestra el resumen).
+    public var detalle = true
+    /// Mostrar el resumen de opciones al empezar.
+    public var mostrarOpciones = true
 
     public init() {}
 

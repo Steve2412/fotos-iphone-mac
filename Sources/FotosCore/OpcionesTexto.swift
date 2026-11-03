@@ -88,7 +88,8 @@ extension Opciones {
     /// Tamaño escrito a mano: «2GB», «500 MB», «1.5G», «800m». Sin unidad se entiende MB.
     /// Unidades de 1000, como el Finder.
     public static func bytes(_ texto: String) -> Int64? {
-        let t = normalizar(texto).replacingOccurrences(of: " ", with: "").replacingOccurrences(of: ",", with: ".")
+        // Sin espacios (también los no separables que pone ByteCountFormatter: «2 GB»).
+        let t = normalizar(texto).filter { !$0.isWhitespace }.replacingOccurrences(of: ",", with: ".")
         let unidades: [(String, Double)] = [("tb", 1e12), ("t", 1e12), ("gb", 1e9), ("g", 1e9),
                                             ("mb", 1e6), ("m", 1e6), ("kb", 1e3), ("k", 1e3)]
         for (sufijo, factor) in unidades where t.hasSuffix(sufijo) {

@@ -17,6 +17,8 @@ extension Configuracion {
         "--no-aae": "--sin-aae", "--no-videos": "--sin-videos", "--max-video": "--video-max",
         "--live-videos": "--videos-live", "--sources": "--origenes", "--any-camera": "--cualquier-camara",
         "--layout": "--organizar", "--cameras": "--camaras",
+        "--profile": "--perfil", "--save-profile": "--guardar-perfil", "--profiles": "--perfiles",
+        "--wizard": "--asistente", "--yes": "--si",
     ]
 
     /// Busca --idioma / --language antes de leer lo demás, para que los errores salgan ya traducidos.
@@ -35,6 +37,8 @@ extension Configuracion {
     fotos-iphone — copia las fotos y vídeos del iPhone al Mac por USB, con los archivos originales.
 
     USO
+      fotos-iphone                    (asistente: pregunta qué copiar)
+      fotos-iphone --perfil Viaje --desde 2026-10-01 --hasta 2026-10-15 --destino ~/Pictures/Viaje
       fotos-iphone --desde 2026-01-01 --hasta 2026-01-31 --destino ~/Pictures/MiRespaldo [--simular]
       fotos-iphone --lista album.txt --destino ~/Pictures/Viaje [--simular]
       fotos-iphone --inspeccionar [--ultimos 30 | --numero 1234 --numero 1235 | --nombre THQV8599]
@@ -57,8 +61,16 @@ extension Configuracion {
       --ultimos N        Con --inspeccionar: los N elementos más recientes (30 por defecto).
       --numero N         Con --inspeccionar: solo el elemento IMG_N. Se puede repetir.
       --nombre NOMBRE    Con --inspeccionar: un archivo de otra app (p. ej. THQV8599). Se puede repetir.
+      --si               Copia sin preguntar (por defecto se simula y se pide confirmación).
       --idioma CÓDIGO    Idioma de los mensajes: es, en (por defecto, el del sistema).
       --ayuda            Muestra esta ayuda.
+
+    ASISTENTE Y PERFILES
+      (sin opciones)     Asistente: pregunta qué copiar, paso a paso, y simula antes de copiar.
+      --asistente        Lo mismo.
+      --perfil NOMBRE    Usa las opciones de un perfil (las demás opciones lo modifican).
+      --guardar-perfil NOMBRE  Guarda las opciones indicadas como perfil.
+      --perfiles         Muestra los perfiles disponibles.
 
     QUÉ COPIAR (por defecto, como la v0.1: fotos y vídeos del iPhone 17 Pro, original + editada)
       --origenes LISTA   camara, capturas, grabaciones, apps (separados por comas) o todo.
@@ -82,6 +94,11 @@ extension Configuracion {
 
     init(argumentos: [String]) throws {
         self.init()
+        // Sin argumentos: el asistente pregunta todo.
+        if argumentos.isEmpty {
+            modo = .asistente
+            return
+        }
         var i = 0
         var modelos: [String] = []
         var desde: Date?
@@ -101,6 +118,20 @@ extension Configuracion {
         func ruta(_ texto: String) -> URL {
             URL(fileURLWithPath: (texto as NSString).expandingTildeInPath)
         }
+        // El perfil se aplica primero, para que las demás opciones lo puedan modificar.
+        if let pos = argumentos.firstIndex(where: { $0 == "--perfil" || $0 == "--profile" }) {
+            guard pos + 1 < argumentos.count else {
+                throw ErrorHerramienta.argumentos(tr("Falta el valor de %@.", argumentos[pos]))
+            }
+            let nombre = argumentos[pos + 1]
+            guard let p = Perfiles.buscar(nombre) else {
+                throw ErrorHerramienta.argumentos(tr("No existe el perfil «%@». Mira los disponibles con --perfiles.", nombre))
+            }
+            perfil = p.nombre
+            opciones = p.opciones
+            destino = p.urlDestino
+        }
+        var destinoExplicito = false
         func fecha(_ opcion: String) throws -> Date {
             let v = try valor(opcion)
             guard let d = Configuracion.dia(v) else {
@@ -113,7 +144,9 @@ extension Configuracion {
             let arg = argumentos[i]
             switch Configuracion.alias[arg] ?? arg {
             case "--lista": lista = ruta(try valor(arg))
-            case "--destino": destino = ruta(try valor(arg))
+            case "--destino":
+                destino = ruta(try valor(arg))
+                destinoExplicito = true
             case "--simular": simular = true
             case "--modelo": modelos.append(try valor(arg))
             case "--sha256": opciones.sha256 = true
@@ -171,6 +204,11 @@ extension Configuracion {
                 guard let x = Opciones.Organizacion(texto: v) else { throw invalido(arg, v, tr("plana, mes, dia")) }
                 opciones.organizacion = x
             case "--camaras": modo = .camaras
+            case "--perfil": _ = try valor(arg)   // ya aplicado arriba
+            case "--guardar-perfil": guardarPerfil = try valor(arg)
+            case "--perfiles": modo = .perfiles
+            case "--asistente": modo = .asistente
+            case "--si": confirmar = false
             case "--ayuda":
                 print(Configuracion.ayuda)
                 exit(0)
@@ -190,6 +228,18 @@ extension Configuracion {
             opciones.periodo = .rango(desde: desde, hasta: hasta)
             periodoDado = true
         }
+
+        // --guardar-perfil sin nada que hacer después: solo se guarda el perfil.
+        if modo == .transferir, guardarPerfil != nil, !simular, !destinoExplicito, !periodoDado, lista == nil, !borrar {
+            modo = .guardarPerfil
+        }
+        // Un perfil trae su periodo; si es «el rango que indiques» (Viaje), hay que darlo.
+        if let nombre = perfil, modo == .transferir, !periodoDado, lista == nil,
+           opciones.periodo == .rangoPorIndicar {
+            throw ErrorHerramienta.argumentos(tr("El perfil «%@» copia el rango de fechas que indiques: añade --desde y --hasta.",
+                                                 tr(nombre)))
+        }
+        if perfil != nil { periodoDado = true }
 
         if modo == .transferir {
             guard lista != nil || periodoDado else {

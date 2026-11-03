@@ -3,6 +3,8 @@ import Foundation
 /// Qué pasó con cada archivo.
 public enum Resultado: Sendable {
     case copiado, copiadoConAviso, yaExistia, seCopiaria, descartado, error, noEncontrado
+    /// Ya estaba copiado en otra carpeta (otra organización) y se movió a la que le toca.
+    case reubicado, seReubicaria
 
     public var texto: String {
         switch self {
@@ -13,12 +15,15 @@ public enum Resultado: Sendable {
         case .descartado: return tr("descartado")
         case .error: return tr("error")
         case .noEncontrado: return tr("no encontrado")
+        case .reubicado: return tr("movido")
+        case .seReubicaria: return tr("se movería")
         }
     }
 
     public var icono: String {
         switch self {
         case .copiado, .yaExistia, .seCopiaria: return "✓"
+        case .reubicado, .seReubicaria: return "↪︎"
         case .copiadoConAviso: return "⚠"
         case .descartado: return "–"
         case .error, .noEncontrado: return "✗"
@@ -65,6 +70,24 @@ public final class Informe {
     private func campo(_ s: String) -> String {
         guard s.contains(";") || s.contains("\"") || s.contains("\n") else { return s }
         return "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+
+    /// Cuántos archivos tienen este resultado.
+    public func cantidad(_ r: Resultado) -> Int {
+        filas.reduce(0) { $0 + ($1.resultado == r ? 1 : 0) }
+    }
+
+    /// Bytes copiados, o a copiar en una simulación.
+    public var bytes: Int64 {
+        filas.filter { $0.resultado.suma }.reduce(Int64(0)) { $0 + $1.bytes }
+    }
+
+    /// Por qué se descartan los archivos, de más a menos frecuente.
+    public func motivosDeDescarte(maximo: Int = 8) -> [(motivo: String, archivos: Int)] {
+        let porMotivo = Dictionary(grouping: filas.filter { $0.resultado == .descartado }, by: \.motivo)
+        return porMotivo.map { (motivo: $0.key, archivos: $0.value.count) }
+            .sorted { $0.archivos != $1.archivos ? $0.archivos > $1.archivos : $0.motivo < $1.motivo }
+            .prefix(maximo).map { $0 }
     }
 
     public func resumen() -> String {

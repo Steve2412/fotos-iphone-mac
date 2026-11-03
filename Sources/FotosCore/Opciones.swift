@@ -6,6 +6,9 @@ import Foundation
 public struct Opciones: Codable, Equatable, Sendable {
 
     public enum Periodo: Codable, Equatable, Sendable {
+        /// Un rango sin fechas («el que indiques»): lo usan los perfiles como «Viaje».
+        public static let rangoPorIndicar = Periodo.rango(desde: nil, hasta: nil)
+
         case todo
         /// Hoy y los n-1 días anteriores.
         case ultimosDias(Int)
@@ -35,6 +38,7 @@ public struct Opciones: Codable, Equatable, Sendable {
             switch self {
             case .todo: return tr("en todo el iPhone")
             case .ultimosDias(let n): return tr("de los últimos %ld días", n)
+            case .rango(nil, nil): return tr("en el rango de fechas que indiques")
             case .rango(let d, let h): return tr("entre %@ y %@", formatoFecha(d), formatoFecha(h))
             }
         }

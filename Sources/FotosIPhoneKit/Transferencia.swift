@@ -6,9 +6,11 @@ import FotosCore
 public final class Transferencia {
     let config: Configuracion
     let catalogo: Catalogo
-    let informe = Informe()
+    public let informe = Informe()
     let lector: LectorCamara
     private var manifiesto = Manifiesto()
+    /// Archivos movidos a otra carpeta por cambiar la organización.
+    private var reubicados = 0
     private let fm = FileManager.default
     private var destino: URL!
     private var temporal: URL!
@@ -22,9 +24,11 @@ public final class Transferencia {
     }
 
     public func ejecutar() async throws {
-        print(tr("⚙️  Opciones:"))
-        for linea in op.resumen { print("   · " + linea) }
-        print("")
+        if config.mostrarOpciones {
+            print(tr("⚙️  Opciones:"))
+            for linea in op.resumen { print("   · " + linea) }
+            print("")
+        }
 
         let entradas: [EntradaAlbum]
         var directos: [Int: Elemento] = [:]
@@ -44,6 +48,11 @@ public final class Transferencia {
 
         if config.simular {
             print(tr("🧪 Simulación: no se copiará nada.\n"))
+            // Con destino conocido, la simulación también dice qué está ya copiado o se movería.
+            if let d = config.destino {
+                destino = d.standardizedFileURL
+                manifiesto = Manifiesto.leer(en: destino)
+            }
         } else {
             destino = config.destino!.standardizedFileURL
             temporal = destino.appendingPathComponent(".temporal-fotos-iphone", isDirectory: true)
@@ -59,14 +68,16 @@ public final class Transferencia {
             let busqueda: Busqueda = directos[entrada.linea].map { .encontrado($0) } ?? catalogo.buscar(entrada)
             switch busqueda {
             case .noEncontrado(let motivo):
-                print("\(prefijo)  ✗ \(motivo)")
+                if config.detalle { print("\(prefijo)  ✗ \(motivo)") }
                 informe.agregar(entrada: entrada.nombre, archivo: "", tipo: "", resultado: .noEncontrado, motivo: motivo)
             case .encontrado(let el):
                 guard procesados.insert(ObjectIdentifier(el)).inserted else {
                     print(tr("%@  (repetido en la lista, ya procesado)", prefijo))
                     continue
                 }
-                print(tr("%@  · %@ del %@", prefijo, el.descripcion, formatoFecha(el.fecha)))
+                if config.detalle {
+                    print(tr("%@  · %@ del %@", prefijo, el.descripcion, formatoFecha(el.fecha)))
+                }
                 await procesar(el, entrada: entrada)
             }
             if !config.simular {
@@ -74,6 +85,9 @@ public final class Transferencia {
                 try? manifiesto.escribir(en: destino)
             }
             if (i + 1) % 200 == 0 { lector.guardar() }
+            if !config.detalle && ((i + 1) % 100 == 0 || i + 1 == entradas.count) {
+                print(tr("   … %ld/%ld", i + 1, entradas.count))
+            }
         }
         lector.guardar()
 
@@ -90,6 +104,9 @@ public final class Transferencia {
         if lector.videosSinLeer > 0 {
             print(tr("   ⚠️  %ld vídeos sin cabecera legible: su cámara se comprueba al copiar.", lector.videosSinLeer))
         }
+        if reubicados > 0 {
+            print(tr("   ↪︎ %ld archivos ya copiados se movieron a la organización elegida. Las carpetas antiguas que hayan quedado vacías puedes borrarlas desde el Finder.", reubicados))
+        }
         print(tr("📄 Informe: %@", rutaInforme.path))
     }
 
@@ -99,8 +116,10 @@ public final class Transferencia {
         let decisiones = Reglas.clasificar(el, op)
 
         func registrar(_ d: Decision, _ resultado: Resultado, _ motivo: String = "", sha: String = "") {
-            let nota = motivo.isEmpty ? "" : " — \(motivo)"
-            print("     \(resultado.icono) \(d.archivo.nombre)  [\(d.tipo.texto)]  \(resultado.texto)\(nota)")
+            if config.detalle {
+                let nota = motivo.isEmpty ? "" : " — \(motivo)"
+                print("     \(resultado.icono) \(d.archivo.nombre)  [\(d.tipo.texto)]  \(resultado.texto)\(nota)")
+            }
             informe.agregar(entrada: entrada.nombre, archivo: d.archivo.nombre, tipo: d.tipo.texto,
                             resultado: resultado, motivo: motivo, bytes: d.archivo.tamano, sha: sha)
         }
@@ -178,15 +197,13 @@ public final class Transferencia {
                 registrar(d, .descartado, d.motivo?.texto ?? "")
                 continue
             }
-            if config.simular {
-                registrar(d, .seCopiaria, formatoBytes(d.archivo.tamano))
+            if destino != nil, let existente = rutaExistente(d.archivo, para: el) {
+                // Ya copiado antes (según el manifiesto, o en su ruta con el mismo tamaño).
+                reubicarSiHaceFalta(d, existente: existente, elemento: el, registrar: registrar)
                 continue
             }
-            if let existente = rutaExistente(d.archivo, para: el) {
-                // Ya copiado antes (según el manifiesto, o en su ruta con el mismo tamaño).
-                manifiesto.registrar(d.archivo, ruta: relativa(existente), elemento: el.etiqueta,
-                                     sha256: manifiesto.entradas[d.archivo.identidad]?.sha256)
-                registrar(d, .yaExistia)
+            if config.simular {
+                registrar(d, .seCopiaria, formatoBytes(d.archivo.tamano))
                 continue
             }
             var final = destino.appendingPathComponent(d.rutaRelativa)
@@ -221,6 +238,45 @@ public final class Transferencia {
             } catch {
                 registrar(d, .error, error.localizedDescription)
             }
+        }
+    }
+
+    /// Un archivo ya copiado: si está en la carpeta que le toca con la organización elegida, «ya existía»;
+    /// si está en otra (se copió con otra organización), se mueve dentro del destino a la que le toca,
+    /// sin volver a descargarlo. Nunca se sobrescribe otro archivo.
+    private func reubicarSiHaceFalta(_ d: Decision, existente: URL, elemento el: Elemento,
+                                     registrar: (Decision, Resultado, String, String) -> Void) {
+        let sha = manifiesto.entradas[d.archivo.identidad]?.sha256
+        let actual = relativa(existente)
+        let carpetaActual = (actual as NSString).deletingLastPathComponent
+        let carpetaPrevista = (d.rutaRelativa as NSString).deletingLastPathComponent
+        guard carpetaActual != carpetaPrevista else {
+            if !config.simular {
+                manifiesto.registrar(d.archivo, ruta: actual, elemento: el.etiqueta, sha256: sha)
+            }
+            registrar(d, .yaExistia, "", "")
+            return
+        }
+        var prevista = destino.appendingPathComponent(d.rutaRelativa)
+        if fm.fileExists(atPath: prevista.path) {
+            // Ya hay otro archivo con ese nombre en la carpeta nueva: se busca un nombre libre.
+            prevista = rutaLibre(junto: prevista)
+        }
+        let nota = tr("de %@ a %@", actual, relativa(prevista))
+        if config.simular {
+            registrar(d, .seReubicaria, nota, "")
+            return
+        }
+        do {
+            try fm.createDirectory(at: prevista.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.moveItem(at: existente, to: prevista)
+            manifiesto.registrar(d.archivo, ruta: relativa(prevista), elemento: el.etiqueta, sha256: sha)
+            reubicados += 1
+            registrar(d, .reubicado, nota, "")
+        } catch {
+            // No se pudo mover: se deja donde estaba, que sigue siendo un respaldo válido.
+            manifiesto.registrar(d.archivo, ruta: actual, elemento: el.etiqueta, sha256: sha)
+            registrar(d, .yaExistia, tr("no se pudo mover a %@: %@", d.rutaRelativa, error.localizedDescription), "")
         }
     }
 
