@@ -97,6 +97,21 @@ final class AgrupacionTests: XCTestCase {
         XCTAssertEqual(c.otrosElementos[0].archivos.count, 2)
     }
 
+    func testElementosConcretos() throws {
+        let c = Catalogo(archivos: [
+            archivo("IMG_0010.HEIC", 1, "2026-10-03 10:00:00", grupo: "x"),
+            archivo("IMG_0011.HEIC", 1, "2026-10-04 10:00:00", grupo: "y"),
+            archivo("THQV8599.JPG", 1, "2026-10-05 10:00:00", grupo: nil),
+        ])
+        var conf = Configuracion()
+        XCTAssertEqual(try c.elementos(segun: conf).count, 3)
+        conf.numeros = [11]
+        conf.nombres = ["thqv8599"]
+        XCTAssertEqual(try c.elementos(segun: conf).map(\.etiqueta), ["IMG_0011", "THQV8599"])
+        conf.opciones.periodo = .rango(desde: fecha("2026-10-05 00:00:00"), hasta: nil)
+        XCTAssertEqual(try c.elementos(segun: conf).map(\.etiqueta), ["THQV8599"])
+    }
+
     func testElementosEnPeriodoOrdenados() {
         let c = Catalogo(archivos: [
             archivo("IMG_0010.HEIC", 1, "2026-10-03 10:00:00", grupo: "x"),

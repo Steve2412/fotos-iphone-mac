@@ -33,7 +33,8 @@ public final class Transferencia {
         let entradas: [EntradaAlbum]
         var directos: [Int: Elemento] = [:]
         if config.porFechas {
-            let elegidos = catalogo.elementos(en: op.periodo)
+            let elegidos = Catalogo.filtrar(catalogo.elementos(en: op.periodo),
+                                            numeros: config.numeros, nombres: config.nombres)
             entradas = elegidos.enumerated().map { i, el in
                 directos[i] = el
                 return EntradaAlbum(linea: i, nombre: el.etiqueta, numero: el.numero ?? 0, fecha: el.fecha)
@@ -100,7 +101,7 @@ public final class Transferencia {
             rutaInforme = destino.appendingPathComponent("informe.csv")
         }
         try informe.escribir(en: rutaInforme)
-        print("\n" + informe.resumen())
+        print("\n" + informe.resumen(simulacion: config.simular))
         if lector.videosSinLeer > 0 {
             print(tr("   ⚠️  %ld vídeos sin cabecera legible: su cámara se comprueba al copiar.", lector.videosSinLeer))
         }

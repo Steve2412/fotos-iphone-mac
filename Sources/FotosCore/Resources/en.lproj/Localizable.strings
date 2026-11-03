@@ -7,7 +7,7 @@
 */
 
 "_idioma" = "English";
-"AYUDA" = "fotos-iphone — copies photos and videos from the iPhone to the Mac over USB, as original files.\n\nUSAGE\n  fotos-iphone                    (assistant: asks what to copy)\n  fotos-iphone --profile Trip --from 2026-10-01 --to 2026-10-15 --dest ~/Pictures/Trip\n  fotos-iphone --from 2026-01-01 --to 2026-01-31 --dest ~/Pictures/MyBackup [--simulate]\n  fotos-iphone --list album.txt --dest ~/Pictures/Trip [--simulate]\n  fotos-iphone --inspect [--last 30 | --number 1234 --number 1235 | --name THQV8599]\n\nOPTIONS\n  --from YYYY-MM-DD  Copy what was taken from that day (included).\n  --to YYYY-MM-DD    …up to that day (included). Used instead of --list.\n  --days N           The last N days (today included).\n  --all              The whole iPhone.\n  --list PATH        Album list created by the Shortcut\n                     (one line per item: IMG_1234|2026-10-20T14:33:12).\n  --dest PATH        Folder where the files and informe.csv (the report) are saved.\n  --simulate         Shows what would be copied and what would be skipped, without copying.\n  --delete           Deletes from the iPhone what is already backed up in --dest (asks for\n                     confirmation; with --simulate it only shows what it would delete). EXPERIMENTAL.\n  --sha256           Adds the SHA-256 fingerprint of each copied file to the report.\n  --inspect          Shows how the Mac sees the iPhone's files (names, groups, source, camera).\n  --cameras          Counts items by camera and source (in the period, or on the whole iPhone).\n  --dump             Saves every file the iPhone shows to catalogo-iphone.csv (diagnostics).\n  --last N           With --inspect: the N most recent items (30 by default).\n  --number N         With --inspect: only item IMG_N. Can be repeated.\n  --name NAME        With --inspect: a file from another app (e.g. THQV8599). Can be repeated.\n  --yes              Copies without asking (by default it simulates and asks for confirmation).\n  --language CODE    Language of the messages: es, en (default: the system's).\n  --help             Shows this help.\n\nASSISTANT AND PROFILES\n  (no options)       Assistant: asks what to copy, step by step, and simulates before copying.\n  --wizard           The same.\n  --profile NAME     Uses a profile's options (other options modify it).\n  --save-profile NAME  Saves the given options as a profile.\n  --profiles         Shows the available profiles.\n\nWHAT TO COPY (default, like v0.1: iPhone 17 Pro photos and videos, original + edited)\n  --sources LIST     camera, screenshots, recordings, apps (comma-separated) or all.\n  --model NAME       Accepted camera model. Can be repeated.\n  --any-camera       Accepts photos and videos from any camera.\n  --versions V       originals (original only) · final (the edited one if it exists)\n                     · both (original + edited).\n  --no-aae           Without the edit instructions (.AAE).\n  --no-videos        Without videos.\n  --max-video SIZE   Skips videos larger than SIZE (e.g. 2GB, 500MB).\n  --live-videos      Includes the Live Photo videos.\n  --raw MODE         include · exclude · only (RAW/DNG photos only).\n  --layout MODE      flat (all together) · month (2026/2026-10/) · day (2026/2026-10/2026-10-20/).\n\n  Every option is also accepted in Spanish (--desde, --hasta, --destino, --simular…).\n\nBEFORE YOU START\n  · iPhone: Settings → Apps → Photos → Transfer to Mac or PC → “Keep Originals”.\n  · iPhone unlocked and connected by cable; Image Capture open and Photos closed on the Mac.";
+"AYUDA" = "fotos-iphone — copies photos and videos from the iPhone to the Mac over USB, as original files.\n\nUSAGE\n  fotos-iphone                    (assistant: asks what to copy)\n  fotos-iphone --profile Trip --from 2026-10-01 --to 2026-10-15 --dest ~/Pictures/Trip\n  fotos-iphone --from 2026-01-01 --to 2026-01-31 --dest ~/Pictures/MyBackup [--simulate]\n  fotos-iphone --list album.txt --dest ~/Pictures/Trip [--simulate]\n  fotos-iphone --inspect [--last 30 | --number 1234 --number 1235 | --name THQV8599]\n\nOPTIONS\n  --from YYYY-MM-DD  Copy what was taken from that day (included).\n  --to YYYY-MM-DD    …up to that day (included). Used instead of --list.\n  --days N           The last N days (today included).\n  --all              The whole iPhone.\n  --list PATH        Album list created by the Shortcut\n                     (one line per item: IMG_1234|2026-10-20T14:33:12).\n  --dest PATH        Folder where the files and informe.csv (the report) are saved.\n  --simulate         Shows what would be copied and what would be skipped, without copying.\n  --delete           Deletes from the iPhone what is fully backed up in --dest (original and\n                     edited). Asks you to type a key; with --simulate it only shows what it\n                     would delete. EXPERIMENTAL.\n  --sha256           Adds the SHA-256 fingerprint of each copied file to the report.\n  --inspect          Shows how the Mac sees the iPhone's files (names, groups, source, camera).\n  --cameras          Counts items by camera and source (in the period, or on the whole iPhone).\n  --dump             Saves every file the iPhone shows to catalogo-iphone.csv (diagnostics).\n  --last N           With --inspect: the N most recent items (30 by default).\n  --number N         Only item IMG_N (or WIOR2185…) when inspecting, copying or deleting.\n                     It is copied whatever its source. Can be repeated.\n  --name NAME        Only the file from another app with that name (e.g. THQV8599). Can be repeated.\n  --yes              Copies without asking (by default it simulates and asks for confirmation).\n  --language CODE    Language of the messages: es, en (default: the system's).\n  --help             Shows this help.\n\nASSISTANT AND PROFILES\n  (no options)       Assistant: asks what to copy, step by step, and simulates before copying.\n  --wizard           The same.\n  --profile NAME     Uses a profile's options (other options modify it).\n  --save-profile NAME  Saves the given options as a profile.\n  --profiles         Shows the available profiles.\n\nWHAT TO COPY (default, like v0.1: iPhone 17 Pro photos and videos, original + edited)\n  --sources LIST     camera, screenshots, recordings, apps (comma-separated) or all.\n  --model NAME       Accepted camera model. Can be repeated.\n  --any-camera       Accepts photos and videos from any camera.\n  --versions V       originals (original only) · final (the edited one if it exists)\n                     · both (original + edited).\n  --no-aae           Without the edit instructions (.AAE).\n  --no-videos        Without videos.\n  --max-video SIZE   Skips videos larger than SIZE (e.g. 2GB, 500MB).\n  --live-videos      Includes the Live Photo videos.\n  --raw MODE         include · exclude · only (RAW/DNG photos only).\n  --layout MODE      flat (all together) · month (2026/2026-10/) · day (2026/2026-10/2026-10-20/).\n\n  Every option is also accepted in Spanish (--desde, --hasta, --destino, --simular…).\n\nBEFORE YOU START\n  · iPhone: Settings → Apps → Photos → Transfer to Mac or PC → “Keep Originals”.\n  · iPhone unlocked and connected by cable; Image Capture open and Photos closed on the Mac.";
 
 "\nLos perfiles que guardes van en %@" = "\nProfiles you save go in %@";
 "\nNada que borrar." = "\nNothing to delete.";
@@ -29,7 +29,10 @@
 "\n🔎 %ld elementos (✓ se guardaría, – se descartaría):" = "\n🔎 %ld items (✓ would be kept, – would be skipped):";
 "\n🗑  Se descartaría:" = "\n🗑  Would be skipped:";
 "\n🧪 Simulación: no se ha borrado nada." = "\n🧪 Simulation: nothing was deleted.";
+"      Si los quieres conservar, cópialos antes (por ejemplo con --videos-live)." = "      If you want to keep them, copy them first (for example with --live-videos).";
 "   %@  ·  %ld fotos · %ld vídeos" = "   %@  ·  %ld photos · %ld videos";
+"   %@ ✓ %@ borrado (comprobado en el iPhone)" = "   %@ ✓ %@ deleted (checked on the iPhone)";
+"   %@ ✗ %@: sigue en el iPhone: %@" = "   %@ ✗ %@: still on the iPhone: %@";
 "   %ld · %@" = "   %ld · %@";
 "   (ignorando «%@», no es un iPhone)" = "   (ignoring “%@”, not an iPhone)";
 "   Archivos de otras apps (sin IMG_): %ld (p. ej. %@)" = "   Files from other apps (no IMG_): %ld (e.g. %@)";
@@ -43,7 +46,7 @@
 "   No entiendo ese tamaño. Ejemplos: 2GB, 500MB." = "   I don't understand that size. Examples: 2GB, 500MB.";
 "   No hay fotos ni vídeos de cámara en ese periodo; se acepta cualquier cámara." = "   There are no camera photos or videos in that period; any camera is accepted.";
 "   No se puede escribir en %@." = "   Can't write to %@.";
-"   No se tocan %ld elementos que no están en el respaldo (orígenes o cámaras no elegidos…)." = "   %ld items that are not in the backup are left untouched (sources or cameras not selected…).";
+"   No se tocan %ld elementos que no están en el respaldo." = "   %ld items that are not in the backup are left untouched.";
 "   Número" = "   Number";
 "   Números separados por comas" = "   Numbers separated by commas";
 "   Pantallas deducidas de las capturas: %@" = "   Screens deduced from screenshots: %@";
@@ -55,7 +58,6 @@
 "   cámara (cabecera del vídeo): %@ / %@  · origen: %@  → %@" = "   camera (video header): %@ / %@  · source: %@  → %@";
 "   cámara (cabecera del vídeo): no se pudo leer; se comprobaría al copiar" = "   camera (video header): couldn't be read; it would be checked while copying";
 "   cámara: %@ / %@  · origen: %@  → %@" = "   camera: %@ / %@  · source: %@  → %@";
-"   incluidos los vídeos de sus Live Photos)." = "   including the videos of their Live Photos).";
 "   origen: %@" = "   source: %@";
 "   volumen a copiar: %@" = "   size to copy: %@";
 "   volumen copiado: %@" = "   size copied: %@";
@@ -66,20 +68,17 @@
 "   ¿Incluir los vídeos de las Live Photos?" = "   Include the Live Photo videos?";
 "   ¿Quisiste decir %@ (%@)?" = "   Did you mean %@ (%@)?";
 "   … %ld/%ld" = "   … %ld/%ld";
-"   … %ld/%ld elementos" = "   … %ld/%ld items";
 "   … sigo esperando (%ld intentos)" = "   … still waiting (%ld attempts)";
 "   ↪︎ %ld archivos ya copiados se movieron a la organización elegida. Las carpetas antiguas que hayan quedado vacías puedes borrarlas desde el Finder." = "   ↪︎ %ld already copied files were moved to the chosen layout. You can delete any old folders left empty from the Finder.";
+"   ⚠️  %ld archivos se borrarían con su elemento sin estar en el respaldo (vídeos de Live Photos, .AAE…): %@%@" = "   ⚠️  %ld files would be deleted with their item without being in the backup (Live Photo videos, .AAE…): %@%@";
 "   ⚠️  %ld vídeos sin cabecera legible: su cámara se comprueba al copiar." = "   ⚠️  %ld videos with an unreadable header: their camera is checked while copying.";
 "   ⚠️  No se tocan %ld elementos con respaldo incompleto:" = "   ⚠️  %ld items with an incomplete backup are left untouched:";
-"   ✗ Error en un lote: %@" = "   ✗ Error in a batch: %@";
 "  ← actual" = "  ← current";
 " (guardado)" = " (saved)";
 " (integrado)" = " (built-in)";
 "%@  (%ld fotos, %ld vídeos)" = "%@  (%ld photos, %ld videos)";
 "%@  (repetido en la lista, ya procesado)" = "%@  (repeated in the list, already processed)";
 "%@  · %@ del %@" = "%@  · %@ from %@";
-"%@ con otro tamaño" = "%@ has a different size";
-"%@ necesita algo como 1234 o IMG_1234: %@" = "%@ needs something like 1234 or IMG_1234: %@";
 "%@ necesita un número: %@" = "%@ needs a number: %@";
 "%@ necesita una fecha AAAA-MM-DD: %@" = "%@ needs a date YYYY-MM-DD: %@";
 "(se deduce de la cámara del vídeo)" = "(deduced from the video's camera)";
@@ -100,7 +99,7 @@
 "Entre dos fechas" = "Between two dates";
 "Falta el valor de %@." = "Missing value for %@.";
 "Huella SHA-256: sí" = "SHA-256 fingerprint: yes";
-"Indica el periodo (--desde/--hasta, --dias N o --todo) o la lista del álbum con --lista." = "Give the period (--from/--to, --days N or --all) or the album list with --list.";
+"Indica el periodo (--desde/--hasta, --dias N o --todo), elementos concretos (--numero, --nombre) o la lista del álbum con --lista." = "Give the period (--from/--to, --days N or --all), specific items (--number, --name) or the album list with --list.";
 "Indica la carpeta de destino con --destino (o usa --simular)." = "Give the destination folder with --dest (or use --simulate).";
 "Instrucciones de edición (.AAE): %@" = "Edit instructions (.AAE): %@";
 "La lista del álbum está vacía." = "The album list is empty.";
@@ -116,7 +115,7 @@
 "Opción desconocida: %@" = "Unknown option: %@";
 "Organización: %@" = "Layout: %@";
 "Orígenes: %@" = "Sources: %@";
-"Para continuar escribe exactamente «%@» y pulsa Intro (cualquier otra cosa cancela): " = "To continue type exactly “%@” and press Return (anything else cancels): ";
+"Para continuar escribe exactamente «%@» (cualquier otra cosa cancela)" = "To continue type exactly “%@” (anything else cancels)";
 "Periodo: %@" = "Period: %@";
 "RAW no elegido" = "RAW not selected";
 "RAW: %@" = "RAW: %@";
@@ -133,9 +132,8 @@
 "Vídeos: %@" = "Videos: %@";
 "acompaña al vídeo de la Live Photo" = "goes with the Live Photo video";
 "ajustes de edición (.AAE)" = "edit settings (.AAE)";
-"archivo;resultado" = "file;result";
 "auxiliar de %@" = "sidecar of %@";
-"borrado" = "deleted";
+"borrado (comprobado)" = "deleted (checked)";
 "camara, capturas, grabaciones, apps, todo" = "camera, screenshots, recordings, apps, all";
 "captura de pantalla" = "screenshot";
 "carpeta única" = "single folder";
@@ -153,13 +151,13 @@
 "dispositivo" = "device";
 "duración: %@ s" = "duration: %@ s";
 "el archivo original no está en el iPhone" = "the original file is not on the iPhone";
+"elemento;archivo;resultado" = "item;file;result";
 "elemento_album;archivo;tipo;resultado;motivo;bytes;sha256" = "album_item;file;type;result;reason;bytes;sha256";
 "en el iPhone solo hay un %@ de otra fecha (%@); el original probablemente está solo en iCloud" = "the iPhone only has a %@ from another date (%@); the original is probably only in iCloud";
 "en el rango de fechas que indiques" = "in the date range you give";
 "en todo el iPhone" = "on the whole iPhone";
 "entre %@ y %@" = "between %@ and %@";
 "error" = "error";
-"error: %@" = "error: %@";
 "excluir" = "exclude";
 "falta %@" = "%@ is missing";
 "foto" = "photo";
@@ -180,7 +178,6 @@
 "no encontrado" = "not found";
 "no está en el iPhone (¿el original solo está en iCloud?)" = "not on the iPhone (is the original only in iCloud?)";
 "no se copia ninguna versión de este elemento" = "no version of this item is copied";
-"no se pudo borrar" = "could not delete";
 "no se pudo mover a %@: %@" = "couldn't move to %@: %@";
 "nombre;carpeta;origen;bytes;creacion;modificacion;uti;grupo" = "name;folder;origin;bytes;created;modified;uti;group";
 "origen no elegido: %@" = "source not selected: %@";
@@ -198,6 +195,7 @@
 "se copiaría" = "would be copied";
 "se descartaría el elemento" = "the item would be skipped";
 "se movería" = "would be moved";
+"sigue en el iPhone" = "still on the iPhone";
 "sin fecha" = "no date";
 "sin original" = "no original";
 "software: %@" = "software: %@";
@@ -259,4 +257,4 @@
 "🧪 Primero, una simulación para ver qué se copiaría…\n" = "🧪 First, a simulation to see what would be copied…\n";
 "🧪 Simulación: no se copiará nada.\n" = "🧪 Simulation: nothing will be copied.\n";
 "🧭 Asistente: te pregunto qué copiar. Intro acepta lo que aparece entre corchetes; q cancela." = "🧭 Assistant: I will ask what to copy. Return accepts what is in brackets; q cancels.";
-"🧹 Se borrarían del iPhone %ld elementos (%ld archivos, %@," = "🧹 %ld items would be deleted from the iPhone (%ld files, %@,";
+"🧹 Se borrarían del iPhone %ld elementos (%ld archivos, %@)." = "🧹 %ld items would be deleted from the iPhone (%ld files, %@).";

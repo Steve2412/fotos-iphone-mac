@@ -2,10 +2,39 @@ import Foundation
 import ImageCaptureCore
 import FotosCore
 
-/// Borra del iPhone solo los elementos cuyo respaldo está completo en la carpeta de destino:
-/// todos los archivos que la herramienta guarda (original, editada, .AAE) deben existir allí
-/// con el mismo tamaño que en el iPhone. Lo demás no se toca.
-/// EXPERIMENTAL: compilado pero sin probar contra el iPhone.
+/// Qué se borraría del iPhone y por qué. Se calcula sin tocar nada.
+public struct PlanBorrado {
+    /// Elementos con respaldo completo: se borrarían enteros.
+    public internal(set) var aBorrar: [Elemento] = []
+    /// Elementos sin nada en el respaldo: no se tocan.
+    public internal(set) var noRespaldados: [Elemento] = []
+    /// Elementos con respaldo a medias: no se tocan. Con lo que falta.
+    public internal(set) var incompletos: [(elemento: Elemento, faltan: [String])] = []
+    /// Archivos que se borran con su elemento aunque no estén en el respaldo
+    /// (vídeo de la Live Photo, .AAE, .DAT) porque no se eligió copiarlos.
+    public internal(set) var sinCopia: [Archivo] = []
+
+    public var archivos: [Archivo] { aBorrar.flatMap(\.archivos) }
+    public var bytes: Int64 { archivos.reduce(Int64(0)) { $0 + $1.tamano } }
+}
+
+/// Resultado de un borrado.
+public struct ResultadoBorrado {
+    public let borrados: Int
+    public let fallidos: Int
+    public let informe: URL
+}
+
+/// Borra del iPhone solo los elementos cuyo respaldo está completo en la carpeta de destino.
+///
+/// Un elemento cuenta como respaldado si están en el respaldo, con el mismo tamaño que en el iPhone,
+/// **su foto o vídeo original y su versión editada, si la tiene**. Esta regla no depende de las
+/// opciones de copia: así, por ejemplo, haber copiado solo la versión final nunca deja borrar el original.
+/// Se buscan donde los apuntó el manifiesto, donde los pondría la organización elegida
+/// y en la raíz del destino (respaldos de la v0.1).
+///
+/// Lo que no se eligió copiar (vídeo de la Live Photo, .AAE) se borra con su elemento, y el plan lo avisa.
+/// EXPERIMENTAL hasta probarlo con fotos de prueba.
 @MainActor
 public final class Borrado {
     let config: Configuracion
@@ -13,121 +42,160 @@ public final class Borrado {
     let camara: ICCameraDevice
     private let fm = FileManager.default
     private var manifiesto = Manifiesto()
+    private let destino: URL
 
     public init(config: Configuracion, catalogo: Catalogo, camara: ICCameraDevice) {
         self.config = config
         self.catalogo = catalogo
         self.camara = camara
+        self.destino = (config.destino ?? URL(fileURLWithPath: "/nonexistent")).standardizedFileURL
     }
 
-    private enum Estado { case respaldado, noRespaldado, incompleto(String) }
+    // MARK: Plan
 
-    public func ejecutar() async throws {
-        let destino = config.destino!
+    public func planificar() throws -> PlanBorrado {
         guard fm.fileExists(atPath: destino.path) else {
             throw ErrorHerramienta.argumentos(tr("No existe la carpeta del respaldo: %@", destino.path))
         }
         print(tr("🗂  Comprobando el respaldo en %@\n", destino.path))
         manifiesto = Manifiesto.leer(en: destino)
 
-        var aBorrar: [Elemento] = []
-        var noRespaldados = 0
-        var incompletos: [(Elemento, String)] = []
-        for el in try elementos() {
-            switch estado(de: el, en: destino) {
-            case .respaldado: aBorrar.append(el)
-            case .noRespaldado: noRespaldados += 1
-            case .incompleto(let m): incompletos.append((el, m))
+        var plan = PlanBorrado()
+        for el in try catalogo.elementos(segun: config) {
+            let necesarios = Borrado.imprescindibles(el)
+            guard !necesarios.isEmpty else {
+                plan.noRespaldados.append(el)
+                continue
+            }
+            var faltan: [String] = []
+            for a in necesarios where ubicacion(a, en: el) == nil {
+                faltan.append(a.nombre)
+            }
+            if faltan.isEmpty {
+                plan.aBorrar.append(el)
+                plan.sinCopia += el.archivos.filter { a in !necesarios.contains { $0 === a } && ubicacion(a, en: el) == nil }
+            } else if faltan.count == necesarios.count {
+                plan.noRespaldados.append(el)
+            } else {
+                plan.incompletos.append((el, faltan))
             }
         }
+        return plan
+    }
 
-        let archivos = aBorrar.flatMap(\.archivos)
-        let bytes = archivos.reduce(Int64(0)) { $0 + $1.tamano }
-        print(tr("🧹 Se borrarían del iPhone %ld elementos (%ld archivos, %@,", aBorrar.count, archivos.count, formatoBytes(bytes)))
-        print(tr("   incluidos los vídeos de sus Live Photos)."))
-        print(tr("   No se tocan %ld elementos que no están en el respaldo (orígenes o cámaras no elegidos…).", noRespaldados))
-        if !incompletos.isEmpty {
-            print(tr("   ⚠️  No se tocan %ld elementos con respaldo incompleto:", incompletos.count))
-            for (el, m) in incompletos.prefix(20) { print("      \(el.etiqueta): \(m)") }
-            if incompletos.count > 20 { print("      …") }
+    /// Lo que tiene que estar en el respaldo para poder borrar el elemento: sus fotos (original
+    /// y editada) o, si es un vídeo, sus vídeos. El vídeo de una Live Photo y los .AAE/.DAT no.
+    static func imprescindibles(_ el: Elemento) -> [Archivo] {
+        let esFoto = el.imagenOriginal != nil
+        return el.archivos.filter { $0.clase == .imagen || ($0.clase == .video && !esFoto) }
+    }
+
+    /// Dónde está este archivo en el respaldo (con su tamaño exacto), o nil.
+    private func ubicacion(_ a: Archivo, en el: Elemento) -> URL? {
+        var candidatas: [String] = []
+        if let r = manifiesto.ruta(de: a) { candidatas.append(r) }
+        candidatas.append(Reglas.rutaRelativa(nombre: a.nombre, fecha: el.fecha, organizacion: config.opciones.organizacion))
+        candidatas.append(a.nombre)   // raíz del destino (respaldos de la v0.1)
+        for r in candidatas {
+            let url = destino.appendingPathComponent(r)
+            let tam = ((try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value
+            if tam == a.tamano { return url }
         }
+        return nil
+    }
 
-        guard !aBorrar.isEmpty else { print(tr("\nNada que borrar.")); return }
-
-        if config.simular {
-            print(tr("\n🧪 Simulación: no se ha borrado nada."))
-            return
+    /// Muestra el plan.
+    public func mostrar(_ plan: PlanBorrado) {
+        print(tr("🧹 Se borrarían del iPhone %ld elementos (%ld archivos, %@).",
+                 plan.aBorrar.count, plan.archivos.count, formatoBytes(plan.bytes)))
+        if plan.aBorrar.count <= 20 {
+            for el in plan.aBorrar {
+                print("   · \(el.etiqueta)  \(formatoFecha(el.fecha))  " + el.archivos.map(\.nombre).joined(separator: ", "))
+            }
         }
-
-        print(tr("\n⚠️  ATENCIÓN\n   · El borrado por cable es definitivo: NO pasa por «Eliminados recientemente».\n   · Si usas Fotos de iCloud, también se borran de iCloud y de tus otros dispositivos."))
-        let clave = tr("BORRAR %ld", aBorrar.count)
-        print(tr("Para continuar escribe exactamente «%@» y pulsa Intro (cualquier otra cosa cancela): ", clave), terminator: "")
-        guard readLine()?.trimmingCharacters(in: .whitespaces) == clave else {
-            print(tr("Cancelado. No se ha borrado nada."))
-            return
+        if !plan.sinCopia.isEmpty {
+            let nombres = plan.sinCopia.prefix(8).map(\.nombre).joined(separator: ", ")
+            print(tr("   ⚠️  %ld archivos se borrarían con su elemento sin estar en el respaldo (vídeos de Live Photos, .AAE…): %@%@",
+                     plan.sinCopia.count, nombres, plan.sinCopia.count > 8 ? "…" : ""))
+            print(tr("      Si los quieres conservar, cópialos antes (por ejemplo con --videos-live)."))
         }
+        print(tr("   No se tocan %ld elementos que no están en el respaldo.", plan.noRespaldados.count))
+        if !plan.incompletos.isEmpty {
+            print(tr("   ⚠️  No se tocan %ld elementos con respaldo incompleto:", plan.incompletos.count))
+            for i in plan.incompletos.prefix(20) {
+                print("      \(i.elemento.etiqueta): " + tr("falta %@", i.faltan.joined(separator: ", ")))
+            }
+            if plan.incompletos.count > 20 { print("      …") }
+        }
+    }
 
-        var informe = "\u{FEFF}" + tr("archivo;resultado") + "\n"
+    // MARK: Ejecución
+
+    /// Borra del iPhone los elementos del plan, uno a uno, y guarda informe-borrado.csv.
+    ///
+    /// No se fía de la respuesta de ImageCaptureCore (en las pruebas dijo «borrado» de una foto que
+    /// siguió en el iPhone): tras cada borrado comprueba en el catálogo del iPhone que los archivos
+    /// desaparecieron de verdad, reintenta una vez lo que siga ahí, e informa solo de lo comprobado.
+    public func ejecutar(_ plan: PlanBorrado) async -> ResultadoBorrado {
+        var informe = "\u{FEFF}" + tr("elemento;archivo;resultado") + "\n"
         var borrados = 0
         var fallidos = 0
-        let lote = 50
-        for inicio in stride(from: 0, to: aBorrar.count, by: lote) {
-            let grupo = Array(aBorrar[inicio..<min(inicio + lote, aBorrar.count)])
-            let items: [ICCameraItem] = grupo.flatMap { $0.archivos.map(\.file) }
-            do {
-                let malos = Set(try await camara.borrar(items))
-                for a in grupo.flatMap(\.archivos) {
-                    let ok = !malos.contains(a.nombre)
-                    informe += "\(a.nombre);\(ok ? tr("borrado") : tr("no se pudo borrar"))\n"
-                    if ok { borrados += 1 } else { fallidos += 1 }
+        for (i, el) in plan.aBorrar.enumerated() {
+            var pendientes = el.archivos
+            var ultimoError: String?
+            for _ in 0..<2 where !pendientes.isEmpty {
+                do {
+                    _ = try await camara.borrar(pendientes.map(\.file))
+                } catch {
+                    ultimoError = error.localizedDescription
                 }
-            } catch {
-                for a in grupo.flatMap(\.archivos) { informe += "\(a.nombre);" + tr("error: %@", error.localizedDescription) + "\n" }
-                fallidos += items.count
-                print(tr("   ✗ Error en un lote: %@", error.localizedDescription))
+                pendientes = await esperarQueDesaparezcan(pendientes)
             }
-            print(tr("   … %ld/%ld elementos", min(inicio + lote, aBorrar.count), aBorrar.count))
+            for a in el.archivos {
+                let sigue = pendientes.contains { $0 === a }
+                let resultado = sigue ? tr("sigue en el iPhone") : tr("borrado (comprobado)")
+                informe += "\(el.etiqueta);\(a.nombre);\(resultado)\n"
+                if sigue { fallidos += 1 } else { borrados += 1 }
+            }
+            let progreso = "[\(i + 1)/\(plan.aBorrar.count)]"
+            if pendientes.isEmpty {
+                print(tr("   %@ ✓ %@ borrado (comprobado en el iPhone)", progreso, el.etiqueta))
+            } else {
+                let nota = ultimoError.map { " — \($0)" } ?? ""
+                print(tr("   %@ ✗ %@: sigue en el iPhone: %@", progreso, el.etiqueta,
+                         pendientes.map(\.nombre).joined(separator: ", ")) + nota)
+            }
         }
         let ruta = destino.appendingPathComponent("informe-borrado.csv")
         try? informe.write(to: ruta, atomically: true, encoding: .utf8)
-        print(tr("\n📊 Archivos borrados: %ld · no borrados: %ld", borrados, fallidos))
-        print(tr("📄 Informe: %@", ruta.path))
-        print(tr("Desconecta y vuelve a conectar el cable antes de volver a usar la herramienta."))
+        return ResultadoBorrado(borrados: borrados, fallidos: fallidos, informe: ruta)
     }
 
-    /// Los mismos elementos que se eligen al copiar (rango de fechas o lista del álbum).
-    private func elementos() throws -> [Elemento] {
-        if config.porFechas {
-            return catalogo.elementos(en: config.opciones.periodo)
+    /// Espera hasta 10 segundos a que los archivos salgan del catálogo del iPhone.
+    /// Devuelve los que siguen ahí.
+    private func esperarQueDesaparezcan(_ archivos: [Archivo]) async -> [Archivo] {
+        var restantes = archivos
+        for _ in 0..<20 {
+            restantes = restantes.filter { sigueEnElIPhone($0) }
+            if restantes.isEmpty { return [] }
+            try? await Task.sleep(nanoseconds: 500_000_000)
         }
-        var vistos = Set<ObjectIdentifier>()
-        var res: [Elemento] = []
-        for e in try ListaAlbum.leer(config.lista!) {
-            if case .encontrado(let el) = catalogo.buscar(e), vistos.insert(ObjectIdentifier(el)).inserted {
-                res.append(el)
-            }
-        }
-        return res
+        return restantes.filter { sigueEnElIPhone($0) }
     }
 
-    private func estado(de el: Elemento, en destino: URL) -> Estado {
-        // Se buscan con las mismas opciones (versiones, organización…) con las que se copió.
-        let guardables = Reglas.clasificar(el, config.opciones).filter(\.conservar)
-        guard !guardables.isEmpty else { return .noRespaldado }
-        var faltan: [String] = []
-        var presentes = 0
-        for d in guardables {
-            let a = d.archivo
-            // Donde lo apuntó la copia (manifiesto) o, si no consta, donde le tocaría ir.
-            let url = destino.appendingPathComponent(manifiesto.ruta(de: a) ?? d.rutaRelativa)
-            let attrs = try? fm.attributesOfItem(atPath: url.path)
-            let tam = (attrs?[.size] as? NSNumber)?.int64Value
-            if tam == a.tamano { presentes += 1 }
-            else { faltan.append(tam == nil ? tr("falta %@", a.nombre) : tr("%@ con otro tamaño", a.nombre)) }
+    /// ¿Sigue este archivo en el catálogo actual del iPhone (como principal o como compañero)?
+    /// Se compara por nombre, tamaño y fecha, no por el objeto, por si el catálogo se renovó.
+    private func sigueEnElIPhone(_ a: Archivo) -> Bool {
+        func igual(_ item: ICCameraItem) -> Bool {
+            guard let f = item as? ICCameraFile else { return false }
+            if f === a.file { return true }
+            return f.name == a.nombre && Int64(f.fileSize) == a.tamano && f.creationDate == a.fecha
         }
-        if faltan.isEmpty { return .respaldado }
-        if presentes == 0 { return .noRespaldado }
-        return .incompleto(faltan.joined(separator: ", "))
+        for item in camara.mediaFiles ?? [] {
+            if igual(item) { return true }
+            if let f = item as? ICCameraFile, (f.sidecarFiles ?? []).contains(where: igual) { return true }
+        }
+        return false
     }
 }
 

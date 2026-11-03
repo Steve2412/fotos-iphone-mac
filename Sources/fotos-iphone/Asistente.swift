@@ -43,9 +43,9 @@ final class Asistente {
         }
 
         // 3. Destino.
-        let elegido = try await preguntarDestino(destino)
-        destino = elegido.texto
-        let urlDestino = elegido.url
+        let carpeta = try await preguntarDestino(destino)
+        destino = carpeta.texto
+        let urlDestino = carpeta.url
 
         // 4. Resumen y, si se quiere, guardar como perfil.
         print(tr("\n⚙️  Resumen:"))

@@ -66,6 +66,33 @@ public final class Catalogo {
         return orden.map { porClave[$0]! }
     }
 
+    /// Los elementos que abarca una ejecución: los del periodo (o los de la lista del Atajo)
+    /// y, si se indicaron --numero o --nombre, solo esos.
+    public func elementos(segun c: Configuracion) throws -> [Elemento] {
+        var r: [Elemento]
+        if c.porFechas {
+            r = elementos(en: c.opciones.periodo)
+        } else {
+            var vistos = Set<ObjectIdentifier>()
+            r = []
+            for e in try ListaAlbum.leer(c.lista!) {
+                if case .encontrado(let el) = buscar(e), vistos.insert(ObjectIdentifier(el)).inserted {
+                    r.append(el)
+                }
+            }
+        }
+        return Catalogo.filtrar(r, numeros: c.numeros, nombres: c.nombres)
+    }
+
+    /// Solo los elementos IMG_N indicados o con esos nombres (sin filtro si ambas listas están vacías).
+    public static func filtrar(_ elementos: [Elemento], numeros: [Int], nombres: [String]) -> [Elemento] {
+        guard !numeros.isEmpty || !nombres.isEmpty else { return elementos }
+        return elementos.filter { el in
+            if let n = el.numero, numeros.contains(n) { return true }
+            return nombres.contains { $0.caseInsensitiveCompare(el.etiqueta) == .orderedSame }
+        }
+    }
+
     /// Agrupa por número. Los números se repiten cada 10.000 fotos, así que dentro
     /// de un mismo número se separan los elementos por fecha.
     static func agrupar(_ archivos: [Archivo]) -> [Int: [Elemento]] {

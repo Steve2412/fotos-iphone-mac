@@ -90,7 +90,8 @@ public final class Informe {
             .prefix(maximo).map { $0 }
     }
 
-    public func resumen() -> String {
+    /// `simulacion` decide si se habla de «a copiar» o «copiado» (nil: se deduce de las filas).
+    public func resumen(simulacion: Bool? = nil) -> String {
         let conteo = Dictionary(grouping: filas, by: { $0.resultado.texto }).mapValues(\.count)
         let copiados = filas.filter { $0.resultado.suma }
         let bytes = copiados.reduce(Int64(0)) { $0 + $1.bytes }
@@ -98,7 +99,7 @@ public final class Informe {
         for (resultado, n) in conteo.sorted(by: { $0.key < $1.key }) {
             lineas.append("   \(resultado): \(n)")
         }
-        if copiados.first?.resultado == .seCopiaria {
+        if simulacion ?? (copiados.first?.resultado == .seCopiaria) {
             lineas.append(tr("   volumen a copiar: %@", formatoBytes(bytes)))
         } else {
             lineas.append(tr("   volumen copiado: %@", formatoBytes(bytes)))

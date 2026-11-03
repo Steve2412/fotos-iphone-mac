@@ -87,7 +87,7 @@ final class Programa {
         case .volcar:
             try Volcado.escribir(camara: camara)
         case .transferir where config.borrar:
-            try await Borrado(config: config, catalogo: catalogo, camara: camara).ejecutar()
+            try await BorradoTerminal.ejecutar(config, catalogo: catalogo, camara: camara)
         case .transferir where config.simular:
             try await Transferencia(config: config, catalogo: catalogo).ejecutar()
         case .transferir:

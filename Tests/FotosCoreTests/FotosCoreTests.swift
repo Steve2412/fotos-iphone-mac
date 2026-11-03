@@ -83,6 +83,10 @@ final class InformeTests: XCTestCase {
         XCTAssertTrue(r.contains("se copiaría: 1"))
         XCTAssertTrue(r.contains("descartado: 1"))
         XCTAssertTrue(r.contains("a copiar"))
+        // Simulación sin nada que copiar: sigue siendo «a copiar», no «copiado».
+        let vacio = Informe()
+        vacio.agregar(entrada: "1", archivo: "x", tipo: "", resultado: .descartado, motivo: "")
+        XCTAssertTrue(vacio.resumen(simulacion: true).contains("a copiar"))
         // Un campo con «;» va entre comillas.
         XCTAssertTrue(i.texto().contains("\"componente; de Live Photo\""))
     }

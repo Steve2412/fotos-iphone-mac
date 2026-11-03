@@ -52,15 +52,17 @@ extension Configuracion {
                          (una línea por elemento: IMG_1234|2026-10-20T14:33:12).
       --destino RUTA     Carpeta donde se guardan los archivos y el informe.csv.
       --simular          Muestra qué se copiaría y qué se descartaría, sin copiar nada.
-      --borrar           Borra del iPhone lo ya respaldado en --destino (pide confirmación;
-                         con --simular solo muestra qué borraría). EXPERIMENTAL.
+      --borrar           Borra del iPhone lo que ya está completo en el respaldo de --destino
+                         (original y editada). Pide escribir una clave; con --simular solo
+                         muestra qué borraría. EXPERIMENTAL.
       --sha256           Añade al informe la huella SHA-256 de cada archivo copiado.
       --inspeccionar     Muestra cómo ve el Mac los archivos del iPhone (nombres, grupos, origen, cámara).
       --camaras          Cuenta los elementos por cámara y origen (en el periodo, o en todo el iPhone).
       --volcar           Guarda en catalogo-iphone.csv todos los archivos que muestra el iPhone (diagnóstico).
       --ultimos N        Con --inspeccionar: los N elementos más recientes (30 por defecto).
-      --numero N         Con --inspeccionar: solo el elemento IMG_N. Se puede repetir.
-      --nombre NOMBRE    Con --inspeccionar: un archivo de otra app (p. ej. THQV8599). Se puede repetir.
+      --numero N         Solo el elemento IMG_N (o WIOR2185…) al inspeccionar, copiar o borrar.
+                         Se copia sea del origen que sea. Se puede repetir.
+      --nombre NOMBRE    Solo el archivo de otra app con ese nombre (p. ej. THQV8599). Se puede repetir.
       --si               Copia sin preguntar (por defecto se simula y se pide confirmación).
       --idioma CÓDIGO    Idioma de los mensajes: es, en (por defecto, el del sistema).
       --ayuda            Muestra esta ayuda.
@@ -105,6 +107,7 @@ extension Configuracion {
         var hasta: Date?
         var periodoDado = false
         var cualquierCamara = false
+        var origenExplicito = false
         func invalido(_ opcion: String, _ v: String, _ validos: String) -> ErrorHerramienta {
             ErrorHerramienta.argumentos(tr("Valor no válido para %@: «%@». Valores posibles: %@.", opcion, v, validos))
         }
@@ -148,7 +151,9 @@ extension Configuracion {
                 destino = ruta(try valor(arg))
                 destinoExplicito = true
             case "--simular": simular = true
-            case "--modelo": modelos.append(try valor(arg))
+            case "--modelo":
+                modelos.append(try valor(arg))
+                origenExplicito = true
             case "--sha256": opciones.sha256 = true
             case "--borrar": borrar = true
             case "--desde": desde = try fecha(arg)
@@ -163,10 +168,12 @@ extension Configuracion {
                 ultimos = n
             case "--numero":
                 let v = try valor(arg)
-                guard let n = ListaAlbum.numero(de: v) ?? Int(v) else {
-                    throw ErrorHerramienta.argumentos(tr("%@ necesita algo como 1234 o IMG_1234: %@", arg, v))
+                if let n = ListaAlbum.numero(de: v) ?? Int(v) {
+                    numeros.append(n)
+                } else {
+                    // No es un número IMG_: se entiende como nombre (p. ej. WIOR2185).
+                    nombres.append((v as NSString).deletingPathExtension)
                 }
-                numeros.append(n)
             case "--nombre":
                 nombres.append(((try valor(arg)) as NSString).deletingPathExtension)
             case "--idioma":
@@ -195,10 +202,13 @@ extension Configuracion {
                 guard let x = Opciones.ModoRAW(texto: v) else { throw invalido(arg, v, tr("incluir, excluir, solo")) }
                 opciones.raw = x
             case "--origenes":
+                origenExplicito = true
                 let v = try valor(arg)
                 guard let x = Opciones.Origen.conjunto(v) else { throw invalido(arg, v, tr("camara, capturas, grabaciones, apps, todo")) }
                 opciones.origenes = x
-            case "--cualquier-camara": cualquierCamara = true
+            case "--cualquier-camara":
+                cualquierCamara = true
+                origenExplicito = true
             case "--organizar":
                 let v = try valor(arg)
                 guard let x = Opciones.Organizacion(texto: v) else { throw invalido(arg, v, tr("plana, mes, dia")) }
@@ -241,9 +251,16 @@ extension Configuracion {
         }
         if perfil != nil { periodoDado = true }
 
+        // Elementos nombrados con --numero/--nombre: se copian sean del origen o cámara que sean,
+        // salvo que se pida un filtro con --origenes, --modelo o --cualquier-camara (o un perfil).
+        if (!numeros.isEmpty || !nombres.isEmpty), !origenExplicito, perfil == nil {
+            opciones.origenes = Set(Opciones.Origen.allCases)
+            opciones.camaras = nil
+        }
+
         if modo == .transferir {
-            guard lista != nil || periodoDado else {
-                throw ErrorHerramienta.argumentos(tr("Indica el periodo (--desde/--hasta, --dias N o --todo) o la lista del álbum con --lista."))
+            guard lista != nil || periodoDado || !numeros.isEmpty || !nombres.isEmpty else {
+                throw ErrorHerramienta.argumentos(tr("Indica el periodo (--desde/--hasta, --dias N o --todo), elementos concretos (--numero, --nombre) o la lista del álbum con --lista."))
             }
             if let d = desde, let h = hasta, d > h {
                 throw ErrorHerramienta.argumentos(tr("--desde es posterior a --hasta."))

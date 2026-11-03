@@ -40,10 +40,7 @@ public final class Inspector {
         if config.numeros.isEmpty && config.nombres.isEmpty {
             elegidos = Array(todos.sorted { ($0.ultimaActividad ?? .distantPast) > ($1.ultimaActividad ?? .distantPast) }.prefix(config.ultimos))
         } else {
-            elegidos = todos.filter { el in
-                if let n = el.numero, config.numeros.contains(n) { return true }
-                return config.nombres.contains { $0.caseInsensitiveCompare(el.etiqueta) == .orderedSame }
-            }
+            elegidos = Catalogo.filtrar(todos, numeros: config.numeros, nombres: config.nombres)
         }
         elegidos.sort { ($0.fecha ?? .distantPast) < ($1.fecha ?? .distantPast) }
 
